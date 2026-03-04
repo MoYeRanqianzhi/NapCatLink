@@ -17,3 +17,13 @@ pub mod reconnect;
 
 // 连接 Actor 子模块：核心连接管理器，协调 WebSocket 读写和消息路由
 pub mod actor;
+
+// 重新导出常用类型，方便外部直接使用
+// ConnectionState — 连接状态枚举
+pub use state::ConnectionState;
+// ConnectionHandle — 连接控制句柄
+pub use actor::ConnectionHandle;
+// ConnectionNotification — Actor 发出的通知
+pub use actor::ConnectionNotification;
+// build_websocket_url — URL 构建辅助函数
+pub use actor::build_websocket_url;
