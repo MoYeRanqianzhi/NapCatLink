@@ -3,7 +3,7 @@
 //! 封装 OneBot 11 标准 API 和 NapCat 扩展 API 的调用接口，
 //! 分为以下子模块：
 //! - `client`：API 客户端，封装请求发送和响应接收
-//! - `dispatcher`：API 请求分发器，管理请求-响应的异步匹配
+//! - `dispatcher`：消息分发器，区分 API 响应和事件，分别路由
 //! - `message`：消息相关 API（发送消息、撤回消息等）
 //! - `group`：群组相关 API（群管理、群成员操作等）
 //! - `account`：账号相关 API（获取登录信息、好友列表等）
@@ -15,10 +15,10 @@
 //! - `napcat`：NapCat 扩展 API（NapCat 特有的增强功能）
 //! - `raw`：原始 API 调用接口（直接发送自定义 JSON 请求）
 
-// API 客户端子模块：封装底层请求发送逻辑
+// API 客户端子模块：封装底层请求发送逻辑和请求-响应配对机制
 pub mod client;
 
-// API 请求分发器子模块：管理请求 ID 到响应回调的映射
+// 消息分发器子模块：区分 API 响应和事件推送，分别路由到对应处理器
 pub mod dispatcher;
 
 // 消息 API 子模块：发送私聊/群聊消息、撤回消息、获取消息等
@@ -50,3 +50,7 @@ pub mod napcat;
 
 // 原始 API 子模块：支持直接发送自定义 JSON 格式的 API 请求
 pub mod raw;
+
+// 重导出核心类型，方便外部直接通过 `napcat_link::api::ApiClient` 等路径访问
+pub use client::ApiClient;
+pub use dispatcher::Dispatcher;
