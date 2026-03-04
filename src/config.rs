@@ -189,6 +189,24 @@ pub struct NapLinkConfig {
     pub api: ApiConfig,
 }
 
+impl NapLinkConfig {
+    /// 创建配置构建器的便捷入口方法
+    ///
+    /// 等价于 `NapLinkConfigBuilder::new(url)`，提供更简洁的调用方式。
+    ///
+    /// # 参数
+    ///
+    /// - `url`: WebSocket 服务器地址（例如 "ws://127.0.0.1:3001"）
+    ///
+    /// # 返回值
+    ///
+    /// 返回一个新的 `NapLinkConfigBuilder` 实例
+    pub fn builder(url: impl Into<String>) -> NapLinkConfigBuilder {
+        // 委托给 NapLinkConfigBuilder::new 创建构建器
+        NapLinkConfigBuilder::new(url)
+    }
+}
+
 /// NapCatLink 配置构建器
 ///
 /// 使用 Builder 模式逐步构建 `NapLinkConfig`，支持链式调用。
@@ -384,6 +402,62 @@ impl NapLinkConfigBuilder {
     pub fn api_retries(mut self, retries: u32) -> Self {
         // 更新 API 重试次数
         self.api_retries = retries;
+        // 返回自身以支持链式调用
+        self
+    }
+
+    /// 设置连接超时时间（`timeout_ms` 的别名，语义更明确）
+    ///
+    /// # 参数
+    ///
+    /// - `ms`: 连接超时时间（毫秒）
+    pub fn connection_timeout_ms(self, ms: u64) -> Self {
+        // 委托给 timeout_ms 方法
+        self.timeout_ms(ms)
+    }
+
+    /// 设置最大重连尝试次数（`max_reconnect_attempts` 的别名，语义更简洁）
+    ///
+    /// # 参数
+    ///
+    /// - `attempts`: 最大重连次数
+    pub fn reconnect_max_attempts(self, attempts: u32) -> Self {
+        // 委托给 max_reconnect_attempts 方法
+        self.max_reconnect_attempts(attempts)
+    }
+
+    /// 设置退避策略的初始延迟时间
+    ///
+    /// # 参数
+    ///
+    /// - `ms`: 初始退避时间（毫秒），即首次重连前等待的时间
+    pub fn backoff_initial_ms(mut self, ms: u64) -> Self {
+        // 更新退避策略的初始延迟
+        self.backoff.initial_ms = ms;
+        // 返回自身以支持链式调用
+        self
+    }
+
+    /// 设置退避策略的最大延迟时间
+    ///
+    /// # 参数
+    ///
+    /// - `ms`: 最大退避时间（毫秒），退避时间的上限
+    pub fn backoff_max_ms(mut self, ms: u64) -> Self {
+        // 更新退避策略的最大延迟
+        self.backoff.max_ms = ms;
+        // 返回自身以支持链式调用
+        self
+    }
+
+    /// 设置退避策略的乘数因子
+    ///
+    /// # 参数
+    ///
+    /// - `multiplier`: 退避乘数，每次重连间隔在上一次基础上乘以此值
+    pub fn backoff_multiplier(mut self, multiplier: f64) -> Self {
+        // 更新退避策略的乘数
+        self.backoff.multiplier = multiplier;
         // 返回自身以支持链式调用
         self
     }

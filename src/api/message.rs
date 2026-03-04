@@ -30,6 +30,7 @@ use crate::types::message::MessageSegment;
 ///
 /// 通过持有 `ApiClient` 的克隆实例来发送请求。
 /// `ApiClient` 是 `Clone` + `Send` + `Sync` 的，因此 `MessageApi` 也是。
+#[derive(Clone)]
 pub struct MessageApi {
     /// API 客户端实例（内部通过 Arc 共享状态，Clone 成本低）
     client: ApiClient,

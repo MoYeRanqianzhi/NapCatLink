@@ -21,6 +21,8 @@ use crate::types::message::MessageSegment;
 /// 媒体 API — 封装所有媒体资源相关的 OneBot 11 API 调用
 ///
 /// 通过持有 `ApiClient` 的克隆实例来发送请求。
+/// `ApiClient` 内部使用 `Arc` 共享状态，Clone 成本极低。
+#[derive(Clone)]
 pub struct MediaApi {
     /// API 客户端实例（内部通过 Arc 共享状态，Clone 成本低）
     client: ApiClient,

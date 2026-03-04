@@ -402,7 +402,7 @@ impl ApiClient {
 ///
 /// 使用 `SystemTime::now()` 获取系统时间，转换为从 UNIX Epoch 起的毫秒数。
 /// 若系统时间早于 UNIX Epoch（理论上不应发生），返回 0。
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     // 获取从 UNIX Epoch 到现在的时间间隔
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

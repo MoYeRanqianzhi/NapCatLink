@@ -105,6 +105,7 @@ pub use raw::RawActionApi;
 /// // api.raw.call("custom_action", serde_json::json!({})).await;
 /// # }
 /// ```
+#[derive(Clone)]
 pub struct OneBotApi {
     /// 消息 API — 消息发送、撤回、获取、已读标记、表情回应、戳一戳等
     pub message: MessageApi,

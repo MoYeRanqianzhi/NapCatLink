@@ -12,6 +12,30 @@
 //! - NapCat 扩展 API 支持
 //! - 强类型事件系统
 //! - 流式文件上传/下载
+//!
+//! # 快速开始
+//! ```rust,no_run
+//! use napcat_link::{NapLink, MessageSegment};
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     // 创建客户端
+//!     let client = NapLink::builder("ws://127.0.0.1:3001")
+//!         .token("your_token")
+//!         .build()?;
+//!
+//!     // 连接到服务器
+//!     client.connect().await?;
+//!
+//!     // 发送消息
+//!     client.api().message.send_group_message(
+//!         123456789,
+//!         vec![MessageSegment::text("Hello from NapCatLink!")],
+//!     ).await?;
+//!
+//!     Ok(())
+//! }
+//! ```
 
 // 配置模块：管理 WebSocket 连接参数、认证信息、重连策略等配置项
 pub mod config;
@@ -36,3 +60,27 @@ pub mod client;
 
 // 工具模块（内部使用）：日志初始化、通用辅助函数等内部工具集
 mod util;
+
+// ---- 核心类型 re-export ----
+// 将最常用的类型直接导出到 crate 根，方便用户使用 `napcat_link::NapLink` 等简短路径
+
+/// 主客户端 — 用户与 SDK 交互的主要入口
+pub use client::NapLink;
+
+/// 配置类型 — SDK 完整配置和日志级别枚举
+pub use config::{NapLinkConfig, LogLevel};
+
+/// 错误类型 — SDK 统一错误枚举和 Result 类型别名
+pub use error::{NapLinkError, Result};
+
+/// 消息段 — OneBot 11 消息的基本构建单元
+pub use types::message::MessageSegment;
+
+/// 事件系统 — 事件总线、事件数据和事件订阅
+pub use event::{EventBus, EventData, EventSubscription};
+
+/// 连接状态 — WebSocket 连接状态枚举
+pub use connection::ConnectionState;
+
+/// API 聚合器 — 所有 API 模块的统一入口
+pub use api::OneBotApi;

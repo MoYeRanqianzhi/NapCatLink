@@ -23,6 +23,8 @@ use crate::error::Result;
 /// 账号 API — 封装所有账号信息查询相关的 OneBot 11 API 调用
 ///
 /// 通过持有 `ApiClient` 的克隆实例来发送请求。
+/// `ApiClient` 内部使用 `Arc` 共享状态，Clone 成本极低。
+#[derive(Clone)]
 pub struct AccountApi {
     /// API 客户端实例（内部通过 Arc 共享状态，Clone 成本低）
     client: ApiClient,
