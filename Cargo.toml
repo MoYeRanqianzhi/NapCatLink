@@ -1,0 +1,49 @@
+[package]
+# 包名称：napcat-link，用于 crates.io 发布标识
+name = "napcat-link"
+# 当前版本号：0.1.0-alpha.1（首个 alpha 预发布版本）
+version = "0.1.0-alpha.1"
+# Rust 语言版本：使用 2024 edition（最新版本，支持最新语言特性）
+edition = "2024"
+# 项目描述：现代化的 Rust SDK，通过 OneBot 11 WebSocket 协议连接 NapCatQQ
+description = "A modern Rust SDK for connecting to NapCatQQ via OneBot 11 WebSocket protocol"
+# 开源许可证：MIT
+license = "MIT"
+# 关键词：用于 crates.io 搜索索引
+keywords = ["qq", "bot", "onebot", "napcat", "websocket"]
+# 分类：API 绑定 和 网络编程
+categories = ["api-bindings", "network-programming"]
+
+[dependencies]
+# tokio：异步运行时，启用完整功能集（包括 rt-multi-thread, macros, io, net, time 等）
+tokio = { version = "1", features = ["full"] }
+# tokio-tungstenite：基于 tokio 的 WebSocket 客户端/服务端实现，启用 native-tls 加密支持
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+# serde：序列化/反序列化框架，启用 derive 宏支持（自动派生 Serialize/Deserialize）
+serde = { version = "1", features = ["derive"] }
+# serde_json：JSON 序列化/反序列化支持，用于 OneBot 11 协议的 JSON 消息处理
+serde_json = "1"
+# tracing：结构化日志和诊断追踪框架
+tracing = "0.1"
+# tracing-subscriber：tracing 的日志订阅者实现，启用 env-filter 支持环境变量配置日志级别
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# thiserror：简化自定义错误类型的 derive 宏（v2 版本）
+thiserror = "2"
+# url：URL 解析和处理库，用于 WebSocket 连接地址构建
+url = "2"
+# futures-util：Future/Stream 实用工具集，用于异步流处理
+futures-util = "0.3"
+# dashmap：高性能并发 HashMap，用于存储待处理的 API 请求回调
+dashmap = "6"
+# uuid：UUID 生成库，启用 v4 随机 UUID 支持，用于生成 API 请求标识
+uuid = { version = "1", features = ["v4"] }
+# sha2：SHA-2 哈希算法实现，用于安全校验
+sha2 = "0.10"
+# base64：Base64 编解码库，用于二进制数据传输编码
+base64 = "0.22"
+# tokio-stream：tokio 异步流工具集，用于事件流处理
+tokio-stream = "0.1"
+
+[dev-dependencies]
+# tokio-test：tokio 异步测试工具，用于单元测试中的异步断言
+tokio-test = "0.4"
