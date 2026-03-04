@@ -23,7 +23,8 @@ use tracing_subscriber::EnvFilter;
 ///
 /// # 示例
 ///
-/// ```rust,no_run
+/// ```rust,ignore
+/// // 此函数为内部模块，外部不可直接访问
 /// napcat_link::util::logger::init_tracing("info");
 /// ```
 #[allow(dead_code)]

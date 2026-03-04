@@ -1,8 +1,8 @@
 [package]
 # 包名称：napcat-link，用于 crates.io 发布标识
 name = "napcat-link"
-# 当前版本号：0.1.0-alpha.1（首个 alpha 预发布版本）
-version = "0.1.0-alpha.1"
+# 当前版本号：0.1.0-alpha.2（添加示例和文档）
+version = "0.1.0-alpha.2"
 # Rust 语言版本：使用 2024 edition（最新版本，支持最新语言特性）
 edition = "2024"
 # 项目描述：现代化的 Rust SDK，通过 OneBot 11 WebSocket 协议连接 NapCatQQ
