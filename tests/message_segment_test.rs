@@ -115,15 +115,17 @@ fn test_deserialize_text_segment() {
 ///
 /// 验证包含所有可选字段（summary、sub_type、url）的图片消息段 JSON
 /// 能正确反序列化，且所有字段值都正确保留。
+/// 注意：sub_type 现在是 u32 类型（NapCatQQ 定义为 Number）。
 #[test]
 fn test_deserialize_image_with_optional_fields() {
     // 构造包含所有可选字段的图片消息段 JSON
+    // sub_type 使用数值类型（NapCatQQ 定义为 Number）
     let json_val = json!({
         "type": "image",
         "data": {
             "file": "abc123.image",
             "summary": "一张图片",
-            "sub_type": "normal",
+            "sub_type": 0,
             "url": "https://example.com/download/abc123.png"
         }
     });
@@ -138,12 +140,14 @@ fn test_deserialize_image_with_optional_fields() {
             summary,
             sub_type,
             url,
+            ..
         } => {
             // 验证必填字段
             assert_eq!(file, "abc123.image");
             // 验证可选字段都有值
             assert_eq!(summary.as_deref(), Some("一张图片"));
-            assert_eq!(sub_type.as_deref(), Some("normal"));
+            // sub_type 现在是 u32 类型
+            assert_eq!(sub_type, Some(0));
             assert_eq!(
                 url.as_deref(),
                 Some("https://example.com/download/abc123.png")
@@ -232,44 +236,56 @@ fn test_message_segment_helpers() {
             summary: None,
             sub_type: None,
             url: None,
+            name: None,
+            path: None,
+            thumb: None,
         }
     );
 
-    // 测试 reply 快捷方法
+    // 测试 reply 快捷方法（id 现在是 Option<String>）
     let reply_seg = MessageSegment::reply("999");
     assert_eq!(
         reply_seg,
         MessageSegment::Reply {
-            id: "999".to_string()
+            id: Some("999".to_string()),
+            seq: None,
         }
     );
 
-    // 测试 face 快捷方法
+    // 测试 face 快捷方法（包含扩展字段）
     let face_seg = MessageSegment::face("178");
     assert_eq!(
         face_seg,
         MessageSegment::Face {
-            id: "178".to_string()
+            id: "178".to_string(),
+            result_id: None,
+            chain_count: None,
         }
     );
 
-    // 测试 record 快捷方法
+    // 测试 record 快捷方法（包含扩展字段）
     let record_seg = MessageSegment::record("voice.amr");
     assert_eq!(
         record_seg,
         MessageSegment::Record {
             file: "voice.amr".to_string(),
             url: None,
+            name: None,
+            path: None,
+            magic: None,
         }
     );
 
-    // 测试 video 快捷方法
+    // 测试 video 快捷方法（包含扩展字段）
     let video_seg = MessageSegment::video("clip.mp4");
     assert_eq!(
         video_seg,
         MessageSegment::Video {
             file: "clip.mp4".to_string(),
             url: None,
+            name: None,
+            path: None,
+            thumb: None,
         }
     );
 
@@ -314,20 +330,31 @@ fn test_roundtrip_all_types() {
             qq: "all".to_string(),
             name: None,
         },
-        // 4. 表情消息段
+        // 4. 表情消息段（包含扩展字段）
         MessageSegment::Face {
             id: "178".to_string(),
+            result_id: None,
+            chain_count: None,
         },
-        // 5. 回复消息段
+        // 5. 回复消息段（通过消息 ID）
         MessageSegment::Reply {
-            id: "54321".to_string(),
+            id: Some("54321".to_string()),
+            seq: None,
         },
-        // 6. 图片消息段（带所有可选字段）
+        // 5b. 回复消息段（通过消息序列号）
+        MessageSegment::Reply {
+            id: None,
+            seq: Some(12345),
+        },
+        // 6. 图片消息段（带所有可选字段，sub_type 为 u32）
         MessageSegment::Image {
             file: "abc.image".to_string(),
             summary: Some("图片描述".to_string()),
-            sub_type: Some("normal".to_string()),
+            sub_type: Some(0),
             url: Some("https://example.com/abc.png".to_string()),
+            name: Some("test.png".to_string()),
+            path: Some("/tmp/test.png".to_string()),
+            thumb: Some("https://example.com/abc_thumb.png".to_string()),
         },
         // 7. 图片消息段（仅必填字段）
         MessageSegment::Image {
@@ -335,22 +362,33 @@ fn test_roundtrip_all_types() {
             summary: None,
             sub_type: None,
             url: None,
+            name: None,
+            path: None,
+            thumb: None,
         },
-        // 8. 语音消息段
+        // 8. 语音消息段（包含扩展字段）
         MessageSegment::Record {
             file: "voice.amr".to_string(),
             url: Some("https://example.com/voice.amr".to_string()),
+            name: Some("voice.amr".to_string()),
+            path: None,
+            magic: Some(1),
         },
-        // 9. 视频消息段
+        // 9. 视频消息段（包含扩展字段）
         MessageSegment::Video {
             file: "video.mp4".to_string(),
             url: None,
+            name: Some("video.mp4".to_string()),
+            path: None,
+            thumb: Some("https://example.com/video_thumb.png".to_string()),
         },
-        // 10. 文件消息段
+        // 10. 文件消息段（包含扩展字段）
         MessageSegment::File {
             file: "document.pdf".to_string(),
             name: Some("报告.pdf".to_string()),
             url: Some("https://example.com/document.pdf".to_string()),
+            path: Some("/tmp/document.pdf".to_string()),
+            thumb: None,
         },
         // 11. JSON 消息段
         MessageSegment::Json {
@@ -379,10 +417,10 @@ fn test_roundtrip_all_types() {
         MessageSegment::Rps {
             result: Some("1".to_string()),
         },
-        // 18. 商城表情消息段
+        // 18. 商城表情消息段（emoji_package_id 为 i64 类型）
         MessageSegment::MFace {
             emoji_id: Some("12345".to_string()),
-            emoji_package_id: Some("1".to_string()),
+            emoji_package_id: Some(1),
             key: Some("abc".to_string()),
             summary: Some("[商城表情]".to_string()),
         },
@@ -665,6 +703,8 @@ fn test_all_type_names() {
                 file: "f".into(),
                 name: None,
                 url: None,
+                path: None,
+                thumb: None,
             },
             "file",
         ),

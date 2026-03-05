@@ -95,8 +95,24 @@ impl Dispatcher {
 
             // 非心跳响应 -> 转发给 ApiClient 进行请求-响应配对
             self.api_client.handle_response(echo, &data);
+        } else if data.get("retcode").is_some() {
+            // 无 echo 但含有 retcode 字段 -> 这是一条孤立的 API 响应
+            // 检查是否是服务端错误响应（如认证失败 1403）
+            let retcode = data.get("retcode").and_then(|v| v.as_i64()).unwrap_or(0);
+            let message = data.get("message").and_then(|v| v.as_str()).unwrap_or("");
+            if retcode != 0 {
+                // 非零 retcode 表示服务端返回了错误（1403 = token 验证失败等）
+                tracing::error!(
+                    "收到服务端错误响应: retcode={}, message={}",
+                    retcode,
+                    message
+                );
+            } else {
+                // retcode=0 的孤立响应（如无 echo 的心跳响应），安全忽略
+                tracing::debug!("忽略无 echo 的 API 响应");
+            }
         } else {
-            // 无 echo 字段 -> 这是一条 OneBot 11 事件推送
+            // 无 echo 且无 retcode -> 这是一条 OneBot 11 事件推送
             // 转发给 EventRouter 进行层级事件路由和广播
             self.event_router.route(data);
         }

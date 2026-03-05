@@ -258,7 +258,7 @@ impl GroupApi {
     ///
     /// - `group_id`: 群号
     /// - `anonymous_flag`: 匿名用户的 flag（从匿名消息事件中获取）
-    /// - `duration`: 禁言时长（秒）
+    /// - `duration`: 禁言时长（秒），默认 1800（30 分钟），0 表示解除禁言
     ///
     /// # 返回值
     ///
@@ -267,13 +267,13 @@ impl GroupApi {
         &self,
         group_id: i64,
         anonymous_flag: &str,
-        duration: i64,
+        duration: Option<i64>,
     ) -> Result<Value> {
-        // 调用 set_group_anonymous_ban action，传入群号、匿名标识和禁言时长
+        // 调用 set_group_anonymous_ban action，duration 默认 1800 秒（30 分钟）
         self.client.call("set_group_anonymous_ban", json!({
             "group_id": group_id,
             "anonymous_flag": anonymous_flag,
-            "duration": duration,
+            "duration": duration.unwrap_or(1800),
         })).await
     }
 

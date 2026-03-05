@@ -2,11 +2,14 @@
 //!
 //! 封装大文件的流式传输功能，包括：
 //! - 流式上传文件（upload_file_stream）
-//! - 获取上传流状态（get_upload_stream_status）
+//! - 获取上传流状态（通过 upload_file_stream + verify_only）
 //! - 流式下载文件（download_file_stream）
 //! - 流式下载文件并保存到本地（download_file_stream_to_file）
 //! - 流式下载图片（download_file_image_stream）
+//! - 流式下载图片并保存到本地（download_file_image_stream_to_file）
 //! - 流式下载语音（download_file_record_stream）
+//! - 流式下载语音并保存到本地（download_file_record_stream_to_file）
+//! - 清理流式传输临时文件（clean_stream_temp_file）
 //!
 //! **注意**：当前版本的流式 API 简化为单次 action 调用，
 //! 完整的分块上传/下载逻辑将在后续版本中实现。
@@ -19,6 +22,12 @@ use crate::api::client::ApiClient;
 
 // 引入 SDK 的 Result 类型别名
 use crate::error::Result;
+
+/// 默认上传分块大小：256KB（与 TS 版 upload 一致）
+const DEFAULT_UPLOAD_CHUNK_SIZE: u64 = 256 * 1024;
+
+/// 默认下载分块大小：64KB（与 TS 版 download 一致）
+const DEFAULT_DOWNLOAD_CHUNK_SIZE: u64 = 64 * 1024;
 
 /// 流式 API — 封装文件流式上传和下载操作
 ///
@@ -84,7 +93,8 @@ impl StreamApi {
 
     /// 获取流式上传状态
     ///
-    /// 对应 OneBot action: `get_upload_stream_status`
+    /// 通过调用 `upload_file_stream` action 并设置 `verify_only: true` 来查询状态
+    /// （与 TS 版一致，不是独立的 action）
     ///
     /// # 参数
     ///
@@ -94,8 +104,11 @@ impl StreamApi {
     ///
     /// 成功返回上传流状态 JSON（包含 status、progress 等字段）
     pub async fn get_upload_stream_status(&self, stream_id: &str) -> Result<Value> {
-        // 调用 get_upload_stream_status action，传入流 ID
-        self.client.call("get_upload_stream_status", json!({"stream_id": stream_id})).await
+        // 调用 upload_file_stream action（与 TS 一致），带 verify_only 标志
+        self.client.call("upload_file_stream", json!({
+            "stream_id": stream_id,
+            "verify_only": true,
+        })).await
     }
 
     /// 流式下载文件
@@ -106,39 +119,49 @@ impl StreamApi {
     ///
     /// # 参数
     ///
-    /// - `file_id`: 文件 ID
+    /// - `file`: 文件标识
+    /// - `chunk_size`: 分块大小（可选，默认 64KB）
     ///
     /// # 返回值
     ///
     /// 成功返回文件数据 JSON（包含 file_data 或 file_path 等字段）
-    pub async fn download_file_stream(&self, file_id: &str) -> Result<Value> {
-        // 调用 download_file_stream action，传入文件 ID
-        self.client.call("download_file_stream", json!({"file_id": file_id})).await
+    pub async fn download_file_stream(
+        &self,
+        file: &str,
+        chunk_size: Option<u64>,
+    ) -> Result<Value> {
+        // 调用 download_file_stream action，传入文件标识和分块大小
+        self.client.call("download_file_stream", json!({
+            "file": file,
+            "chunk_size": chunk_size.unwrap_or(DEFAULT_DOWNLOAD_CHUNK_SIZE),
+        })).await
     }
 
     /// 流式下载文件并保存到本地
     ///
-    /// 对应 OneBot action: `download_file_stream`（带 save_path 参数）
+    /// 对应 OneBot action: `download_file_stream`
     ///
-    /// 通过传入 `save_path` 参数，让服务端直接将文件保存到指定路径。
+    /// **简化版本**：当前调用 download_file_stream 获取数据，
+    /// 完整的客户端分块写入将在后续版本实现。
     ///
     /// # 参数
     ///
-    /// - `file_id`: 文件 ID
-    /// - `path`: 本地保存路径
+    /// - `file`: 文件标识
+    /// - `chunk_size`: 分块大小（可选，默认 64KB）
     ///
     /// # 返回值
     ///
-    /// 成功返回下载结果 JSON（包含 file_path 等字段）
+    /// 成功返回下载结果 JSON
     pub async fn download_file_stream_to_file(
         &self,
-        file_id: &str,
-        path: &str,
+        file: &str,
+        chunk_size: Option<u64>,
     ) -> Result<Value> {
-        // 调用 download_file_stream action，传入文件 ID 和本地保存路径
+        // 调用 download_file_stream action（与 TS 一致，不发送 save_path）
+        // 客户端侧保存逻辑将在完整流式实现中添加
         self.client.call("download_file_stream", json!({
-            "file_id": file_id,
-            "save_path": path,
+            "file": file,
+            "chunk_size": chunk_size.unwrap_or(DEFAULT_DOWNLOAD_CHUNK_SIZE),
         })).await
     }
 
@@ -148,14 +171,50 @@ impl StreamApi {
     ///
     /// # 参数
     ///
-    /// - `file_id`: 图片文件 ID
+    /// - `file`: 图片文件标识
+    /// - `chunk_size`: 分块大小（可选，默认 64KB）
     ///
     /// # 返回值
     ///
     /// 成功返回图片数据 JSON
-    pub async fn download_file_image_stream(&self, file_id: &str) -> Result<Value> {
-        // 调用 download_file_image_stream action，传入文件 ID
-        self.client.call("download_file_image_stream", json!({"file_id": file_id})).await
+    pub async fn download_file_image_stream(
+        &self,
+        file: &str,
+        chunk_size: Option<u64>,
+    ) -> Result<Value> {
+        // 调用 download_file_image_stream action，传入文件标识和分块大小
+        self.client.call("download_file_image_stream", json!({
+            "file": file,
+            "chunk_size": chunk_size.unwrap_or(DEFAULT_DOWNLOAD_CHUNK_SIZE),
+        })).await
+    }
+
+    /// 流式下载图片并保存到本地
+    ///
+    /// 对应 OneBot action: `download_file_image_stream`
+    ///
+    /// **简化版本**：当前调用 download_file_image_stream 获取数据，
+    /// 完整的客户端分块写入将在后续版本实现。
+    ///
+    /// # 参数
+    ///
+    /// - `file`: 图片文件标识
+    /// - `chunk_size`: 分块大小（可选，默认 64KB）
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回图片数据 JSON
+    pub async fn download_file_image_stream_to_file(
+        &self,
+        file: &str,
+        chunk_size: Option<u64>,
+    ) -> Result<Value> {
+        // 调用 download_file_image_stream action
+        // 客户端侧保存逻辑将在完整流式实现中添加
+        self.client.call("download_file_image_stream", json!({
+            "file": file,
+            "chunk_size": chunk_size.unwrap_or(DEFAULT_DOWNLOAD_CHUNK_SIZE),
+        })).await
     }
 
     /// 流式下载语音
@@ -164,13 +223,68 @@ impl StreamApi {
     ///
     /// # 参数
     ///
-    /// - `file_id`: 语音文件 ID
+    /// - `file`: 语音文件标识
+    /// - `out_format`: 输出格式（可选，如 "mp3"）
+    /// - `chunk_size`: 分块大小（可选，默认 64KB）
     ///
     /// # 返回值
     ///
     /// 成功返回语音数据 JSON
-    pub async fn download_file_record_stream(&self, file_id: &str) -> Result<Value> {
-        // 调用 download_file_record_stream action，传入文件 ID
-        self.client.call("download_file_record_stream", json!({"file_id": file_id})).await
+    pub async fn download_file_record_stream(
+        &self,
+        file: &str,
+        out_format: Option<&str>,
+        chunk_size: Option<u64>,
+    ) -> Result<Value> {
+        // 构建基本请求参数
+        let mut params = json!({
+            "file": file,
+            "chunk_size": chunk_size.unwrap_or(DEFAULT_DOWNLOAD_CHUNK_SIZE),
+        });
+        // 如果指定了输出格式，添加到参数中
+        if let Some(fmt) = out_format {
+            params["out_format"] = json!(fmt);
+        }
+        // 调用 download_file_record_stream action
+        self.client.call("download_file_record_stream", params).await
+    }
+
+    /// 流式下载语音并保存到本地
+    ///
+    /// 对应 OneBot action: `download_file_record_stream`
+    ///
+    /// **简化版本**：当前调用 download_file_record_stream 获取数据，
+    /// 完整的客户端分块写入将在后续版本实现。
+    ///
+    /// # 参数
+    ///
+    /// - `file`: 语音文件标识
+    /// - `out_format`: 输出格式（可选，如 "mp3"）
+    /// - `chunk_size`: 分块大小（可选，默认 64KB）
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回语音数据 JSON
+    pub async fn download_file_record_stream_to_file(
+        &self,
+        file: &str,
+        out_format: Option<&str>,
+        chunk_size: Option<u64>,
+    ) -> Result<Value> {
+        // 复用 download_file_record_stream 的逻辑
+        // 客户端侧保存逻辑将在完整流式实现中添加
+        self.download_file_record_stream(file, out_format, chunk_size).await
+    }
+
+    /// 清理流式传输临时文件
+    ///
+    /// 对应 OneBot action: `clean_stream_temp_file`
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回空数据
+    pub async fn clean_stream_temp_file(&self) -> Result<Value> {
+        // 调用 clean_stream_temp_file action，无参数
+        self.client.call("clean_stream_temp_file", json!({})).await
     }
 }

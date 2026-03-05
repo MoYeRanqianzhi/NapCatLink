@@ -64,15 +64,23 @@ pub enum MessageSegment {
     Face {
         /// 表情 ID
         id: String,
+        /// 结果 ID（可选，NapCat 扩展，用于标识表情动画结果）
+        result_id: Option<String>,
+        /// 连击数（可选，NapCat 扩展，表情连击效果的计数）
+        chain_count: Option<i64>,
     },
 
     /// 回复消息段
     ///
     /// 引用回复指定消息。
     /// 对应 OneBot 11 type = "reply"。
+    /// 支持通过 id（消息 ID）或 seq（消息序列号）来指定回复目标，
+    /// NapCatQQ 优先使用 seq。
     Reply {
-        /// 被回复消息的 ID
-        id: String,
+        /// 被回复消息的 ID（可选，与 seq 二选一）
+        id: Option<String>,
+        /// 消息序列号（可选，NapCat 扩展，优先使用）
+        seq: Option<i64>,
     },
 
     /// 图片消息段
@@ -84,10 +92,16 @@ pub enum MessageSegment {
         file: String,
         /// 图片摘要/描述（可选，NapCat 扩展）
         summary: Option<String>,
-        /// 图片子类型（可选，NapCat 扩展，如 "normal"、"sticker" 等）
-        sub_type: Option<String>,
+        /// 图片子类型（可选，NapCat 扩展，数值类型，如 0 = normal、1 = sticker 等）
+        sub_type: Option<u32>,
         /// 图片下载 URL（可选，接收消息时由服务端填充）
         url: Option<String>,
+        /// 图片文件名（可选）
+        name: Option<String>,
+        /// 图片本地文件路径（可选，接收消息时由服务端填充）
+        path: Option<String>,
+        /// 图片缩略图 URL（可选，接收消息时由服务端填充）
+        thumb: Option<String>,
     },
 
     /// 语音消息段
@@ -99,6 +113,12 @@ pub enum MessageSegment {
         file: String,
         /// 语音下载 URL（可选，接收消息时由服务端填充）
         url: Option<String>,
+        /// 语音文件名（可选）
+        name: Option<String>,
+        /// 语音本地文件路径（可选，接收消息时由服务端填充）
+        path: Option<String>,
+        /// 语音魔法变声类型（可选，NapCat 扩展，数值类型）
+        magic: Option<u32>,
     },
 
     /// 视频消息段
@@ -110,6 +130,12 @@ pub enum MessageSegment {
         file: String,
         /// 视频下载 URL（可选，接收消息时由服务端填充）
         url: Option<String>,
+        /// 视频文件名（可选）
+        name: Option<String>,
+        /// 视频本地文件路径（可选，接收消息时由服务端填充）
+        path: Option<String>,
+        /// 视频缩略图 URL（可选，接收消息时由服务端填充）
+        thumb: Option<String>,
     },
 
     /// 文件消息段
@@ -123,6 +149,10 @@ pub enum MessageSegment {
         name: Option<String>,
         /// 文件下载 URL（可选，接收消息时由服务端填充）
         url: Option<String>,
+        /// 文件本地路径（可选，接收消息时由服务端填充）
+        path: Option<String>,
+        /// 文件缩略图 URL（可选，接收消息时由服务端填充）
+        thumb: Option<String>,
     },
 
     /// JSON 消息段
@@ -188,8 +218,8 @@ pub enum MessageSegment {
     MFace {
         /// 表情 ID（可选）
         emoji_id: Option<String>,
-        /// 表情包 ID（可选）
-        emoji_package_id: Option<String>,
+        /// 表情包 ID（可选，NapCatQQ 定义为数值类型）
+        emoji_package_id: Option<i64>,
         /// 表情密钥（可选）
         key: Option<String>,
         /// 表情描述/摘要（可选）
@@ -317,77 +347,143 @@ struct AtData {
 
 /// 表情消息段数据
 ///
-/// 对应 `{ "id": "..." }` 结构。
+/// 对应 `{ "id": "...", "result_id": "...", "chain_count": ... }` 结构。
 #[derive(Serialize, Deserialize)]
 struct FaceData {
     /// 表情 ID
     id: String,
+    /// 结果 ID（可选，用于标识表情动画结果）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    result_id: Option<String>,
+    /// 连击数（可选，表情连击效果的计数）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    chain_count: Option<i64>,
 }
 
 /// 回复消息段数据
 ///
-/// 对应 `{ "id": "..." }` 结构。
+/// 对应 `{ "id": "...", "seq": ... }` 结构。
+/// id 和 seq 均为可选，NapCatQQ 优先使用 seq。
 #[derive(Serialize, Deserialize)]
 struct ReplyData {
-    /// 被回复消息的 ID
-    id: String,
+    /// 被回复消息的 ID（可选，与 seq 二选一）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    id: Option<String>,
+    /// 消息序列号（可选，优先使用）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    seq: Option<i64>,
 }
 
 /// 图片消息段数据
 ///
-/// 对应 `{ "file": "...", "summary": "...", "sub_type": "...", "url": "..." }` 结构。
+/// 对应 `{ "file": "...", "summary": "...", "sub_type": ..., "url": "...", ... }` 结构。
 #[derive(Serialize, Deserialize)]
 struct ImageData {
     /// 图片文件路径、URL 或 Base64
     file: String,
     /// 图片摘要（可选）
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     summary: Option<String>,
-    /// 图片子类型（可选）
+    /// 图片子类型（可选，数值类型，如 0 = normal、1 = sticker 等）
     #[serde(skip_serializing_if = "Option::is_none")]
-    sub_type: Option<String>,
+    #[serde(default)]
+    sub_type: Option<u32>,
     /// 图片下载 URL（可选）
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     url: Option<String>,
+    /// 图片文件名（可选）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    name: Option<String>,
+    /// 图片本地文件路径（可选）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    path: Option<String>,
+    /// 图片缩略图 URL（可选）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    thumb: Option<String>,
 }
 
 /// 语音消息段数据
 ///
-/// 对应 `{ "file": "...", "url": "..." }` 结构。
+/// 对应 `{ "file": "...", "url": "...", "name": "...", "path": "...", "magic": ... }` 结构。
 #[derive(Serialize, Deserialize)]
 struct RecordData {
     /// 语音文件路径或 URL
     file: String,
     /// 语音下载 URL（可选）
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     url: Option<String>,
+    /// 语音文件名（可选）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    name: Option<String>,
+    /// 语音本地文件路径（可选）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    path: Option<String>,
+    /// 语音魔法变声类型（可选，数值类型）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    magic: Option<u32>,
 }
 
 /// 视频消息段数据
 ///
-/// 对应 `{ "file": "...", "url": "..." }` 结构。
+/// 对应 `{ "file": "...", "url": "...", "name": "...", "path": "...", "thumb": "..." }` 结构。
 #[derive(Serialize, Deserialize)]
 struct VideoData {
     /// 视频文件路径或 URL
     file: String,
     /// 视频下载 URL（可选）
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     url: Option<String>,
+    /// 视频文件名（可选）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    name: Option<String>,
+    /// 视频本地文件路径（可选）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    path: Option<String>,
+    /// 视频缩略图 URL（可选）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    thumb: Option<String>,
 }
 
 /// 文件消息段数据
 ///
-/// 对应 `{ "file": "...", "name": "...", "url": "..." }` 结构。
+/// 对应 `{ "file": "...", "name": "...", "url": "...", "path": "...", "thumb": "..." }` 结构。
 #[derive(Serialize, Deserialize)]
 struct FileData {
     /// 文件路径或 URL
     file: String,
     /// 文件名称（可选）
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     name: Option<String>,
     /// 文件下载 URL（可选）
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     url: Option<String>,
+    /// 文件本地路径（可选）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    path: Option<String>,
+    /// 文件缩略图 URL（可选）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    thumb: Option<String>,
 }
 
 /// JSON 消息段数据
@@ -452,20 +548,24 @@ struct RpsData {
 
 /// 商城表情消息段数据
 ///
-/// 对应 `{ "emoji_id": "...", "emoji_package_id": "...", "key": "...", "summary": "..." }` 结构。
+/// 对应 `{ "emoji_id": "...", "emoji_package_id": ..., "key": "...", "summary": "..." }` 结构。
 #[derive(Serialize, Deserialize)]
 struct MFaceData {
     /// 表情 ID（可选）
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     emoji_id: Option<String>,
-    /// 表情包 ID（可选）
+    /// 表情包 ID（可选，数值类型）
     #[serde(skip_serializing_if = "Option::is_none")]
-    emoji_package_id: Option<String>,
+    #[serde(default)]
+    emoji_package_id: Option<i64>,
     /// 表情密钥（可选）
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     key: Option<String>,
     /// 表情描述（可选）
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     summary: Option<String>,
 }
 
@@ -606,15 +706,22 @@ impl Serialize for MessageSegment {
                 .map_err(serde::ser::Error::custom)?,
             },
             // 表情消息段：type = "face"
-            MessageSegment::Face { id } => RawSegment {
+            MessageSegment::Face { id, result_id, chain_count } => RawSegment {
                 r#type: "face".to_string(),
-                data: serde_json::to_value(FaceData { id: id.clone() })
+                data: serde_json::to_value(FaceData {
+                    id: id.clone(),
+                    result_id: result_id.clone(),
+                    chain_count: *chain_count,
+                })
                     .map_err(serde::ser::Error::custom)?,
             },
             // 回复消息段：type = "reply"
-            MessageSegment::Reply { id } => RawSegment {
+            MessageSegment::Reply { id, seq } => RawSegment {
                 r#type: "reply".to_string(),
-                data: serde_json::to_value(ReplyData { id: id.clone() })
+                data: serde_json::to_value(ReplyData {
+                    id: id.clone(),
+                    seq: *seq,
+                })
                     .map_err(serde::ser::Error::custom)?,
             },
             // 图片消息段：type = "image"
@@ -623,41 +730,55 @@ impl Serialize for MessageSegment {
                 summary,
                 sub_type,
                 url,
+                name,
+                path,
+                thumb,
             } => RawSegment {
                 r#type: "image".to_string(),
                 data: serde_json::to_value(ImageData {
                     file: file.clone(),
                     summary: summary.clone(),
-                    sub_type: sub_type.clone(),
+                    sub_type: *sub_type,
                     url: url.clone(),
+                    name: name.clone(),
+                    path: path.clone(),
+                    thumb: thumb.clone(),
                 })
                 .map_err(serde::ser::Error::custom)?,
             },
             // 语音消息段：type = "record"
-            MessageSegment::Record { file, url } => RawSegment {
+            MessageSegment::Record { file, url, name, path, magic } => RawSegment {
                 r#type: "record".to_string(),
                 data: serde_json::to_value(RecordData {
                     file: file.clone(),
                     url: url.clone(),
+                    name: name.clone(),
+                    path: path.clone(),
+                    magic: *magic,
                 })
                 .map_err(serde::ser::Error::custom)?,
             },
             // 视频消息段：type = "video"
-            MessageSegment::Video { file, url } => RawSegment {
+            MessageSegment::Video { file, url, name, path, thumb } => RawSegment {
                 r#type: "video".to_string(),
                 data: serde_json::to_value(VideoData {
                     file: file.clone(),
                     url: url.clone(),
+                    name: name.clone(),
+                    path: path.clone(),
+                    thumb: thumb.clone(),
                 })
                 .map_err(serde::ser::Error::custom)?,
             },
             // 文件消息段：type = "file"
-            MessageSegment::File { file, name, url } => RawSegment {
+            MessageSegment::File { file, name, url, path, thumb } => RawSegment {
                 r#type: "file".to_string(),
                 data: serde_json::to_value(FileData {
                     file: file.clone(),
                     name: name.clone(),
                     url: url.clone(),
+                    path: path.clone(),
+                    thumb: thumb.clone(),
                 })
                 .map_err(serde::ser::Error::custom)?,
             },
@@ -716,7 +837,7 @@ impl Serialize for MessageSegment {
                 r#type: "mface".to_string(),
                 data: serde_json::to_value(MFaceData {
                     emoji_id: emoji_id.clone(),
-                    emoji_package_id: emoji_package_id.clone(),
+                    emoji_package_id: *emoji_package_id,
                     key: key.clone(),
                     summary: summary.clone(),
                 })
@@ -850,28 +971,38 @@ impl<'de> Deserialize<'de> for MessageSegment {
                 // 将 data 反序列化为 FaceData 结构
                 let d: FaceData =
                     serde_json::from_value(raw.data).map_err(serde::de::Error::custom)?;
-                // 构造 Face 变体
-                Ok(MessageSegment::Face { id: d.id })
+                // 构造 Face 变体，包含扩展字段
+                Ok(MessageSegment::Face {
+                    id: d.id,
+                    result_id: d.result_id,
+                    chain_count: d.chain_count,
+                })
             }
             // 回复消息段
             "reply" => {
                 // 将 data 反序列化为 ReplyData 结构
                 let d: ReplyData =
                     serde_json::from_value(raw.data).map_err(serde::de::Error::custom)?;
-                // 构造 Reply 变体
-                Ok(MessageSegment::Reply { id: d.id })
+                // 构造 Reply 变体，id 和 seq 均为可选
+                Ok(MessageSegment::Reply {
+                    id: d.id,
+                    seq: d.seq,
+                })
             }
             // 图片消息段
             "image" => {
                 // 将 data 反序列化为 ImageData 结构
                 let d: ImageData =
                     serde_json::from_value(raw.data).map_err(serde::de::Error::custom)?;
-                // 构造 Image 变体
+                // 构造 Image 变体，包含所有可选扩展字段
                 Ok(MessageSegment::Image {
                     file: d.file,
                     summary: d.summary,
                     sub_type: d.sub_type,
                     url: d.url,
+                    name: d.name,
+                    path: d.path,
+                    thumb: d.thumb,
                 })
             }
             // 语音消息段
@@ -879,10 +1010,13 @@ impl<'de> Deserialize<'de> for MessageSegment {
                 // 将 data 反序列化为 RecordData 结构
                 let d: RecordData =
                     serde_json::from_value(raw.data).map_err(serde::de::Error::custom)?;
-                // 构造 Record 变体
+                // 构造 Record 变体，包含所有可选扩展字段
                 Ok(MessageSegment::Record {
                     file: d.file,
                     url: d.url,
+                    name: d.name,
+                    path: d.path,
+                    magic: d.magic,
                 })
             }
             // 视频消息段
@@ -890,10 +1024,13 @@ impl<'de> Deserialize<'de> for MessageSegment {
                 // 将 data 反序列化为 VideoData 结构
                 let d: VideoData =
                     serde_json::from_value(raw.data).map_err(serde::de::Error::custom)?;
-                // 构造 Video 变体
+                // 构造 Video 变体，包含所有可选扩展字段
                 Ok(MessageSegment::Video {
                     file: d.file,
                     url: d.url,
+                    name: d.name,
+                    path: d.path,
+                    thumb: d.thumb,
                 })
             }
             // 文件消息段
@@ -901,11 +1038,13 @@ impl<'de> Deserialize<'de> for MessageSegment {
                 // 将 data 反序列化为 FileData 结构
                 let d: FileData =
                     serde_json::from_value(raw.data).map_err(serde::de::Error::custom)?;
-                // 构造 File 变体
+                // 构造 File 变体，包含所有可选扩展字段
                 Ok(MessageSegment::File {
                     file: d.file,
                     name: d.name,
                     url: d.url,
+                    path: d.path,
+                    thumb: d.thumb,
                 })
             }
             // JSON 消息段
@@ -1128,10 +1267,13 @@ impl MessageSegment {
             summary: None,
             sub_type: None,
             url: None,
+            name: None,
+            path: None,
+            thumb: None,
         }
     }
 
-    /// 创建回复消息段
+    /// 创建回复消息段（通过消息 ID）
     ///
     /// # 参数
     ///
@@ -1145,8 +1287,34 @@ impl MessageSegment {
     /// let seg = MessageSegment::reply("12345");
     /// ```
     pub fn reply(id: impl Into<String>) -> Self {
-        // 构造 Reply 变体
-        MessageSegment::Reply { id: id.into() }
+        // 构造 Reply 变体，通过消息 ID 回复，seq 默认为 None
+        MessageSegment::Reply {
+            id: Some(id.into()),
+            seq: None,
+        }
+    }
+
+    /// 创建回复消息段（通过消息序列号）
+    ///
+    /// NapCatQQ 优先使用 seq 来标识回复目标。
+    ///
+    /// # 参数
+    ///
+    /// * `seq` - 消息序列号
+    ///
+    /// # 示例
+    ///
+    /// ```rust
+    /// use napcat_link::types::message::MessageSegment;
+    ///
+    /// let seg = MessageSegment::reply_by_seq(12345);
+    /// ```
+    pub fn reply_by_seq(seq: i64) -> Self {
+        // 构造 Reply 变体，通过消息序列号回复，id 默认为 None
+        MessageSegment::Reply {
+            id: None,
+            seq: Some(seq),
+        }
     }
 
     /// 创建表情消息段
@@ -1163,8 +1331,12 @@ impl MessageSegment {
     /// let seg = MessageSegment::face("178");
     /// ```
     pub fn face(id: impl Into<String>) -> Self {
-        // 构造 Face 变体
-        MessageSegment::Face { id: id.into() }
+        // 构造 Face 变体，扩展字段默认为 None
+        MessageSegment::Face {
+            id: id.into(),
+            result_id: None,
+            chain_count: None,
+        }
     }
 
     /// 创建语音消息段
@@ -1181,10 +1353,13 @@ impl MessageSegment {
     /// let seg = MessageSegment::record("https://example.com/voice.amr");
     /// ```
     pub fn record(file: impl Into<String>) -> Self {
-        // 构造 Record 变体，url 默认为 None
+        // 构造 Record 变体，可选字段默认为 None
         MessageSegment::Record {
             file: file.into(),
             url: None,
+            name: None,
+            path: None,
+            magic: None,
         }
     }
 
@@ -1202,10 +1377,13 @@ impl MessageSegment {
     /// let seg = MessageSegment::video("https://example.com/video.mp4");
     /// ```
     pub fn video(file: impl Into<String>) -> Self {
-        // 构造 Video 变体，url 默认为 None
+        // 构造 Video 变体，可选字段默认为 None
         MessageSegment::Video {
             file: file.into(),
             url: None,
+            name: None,
+            path: None,
+            thumb: None,
         }
     }
 

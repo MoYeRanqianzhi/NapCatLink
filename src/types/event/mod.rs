@@ -97,7 +97,7 @@ pub enum OneBotEvent {
     /// 戳一戳通知（post_type = "notice", notice_type = "notify", sub_type = "poke"）
     Poke(PokeNotice),
 
-    /// 群灰色提示条通知（post_type = "notice", notice_type = "group_gray_tip"）
+    /// 群灰色提示条通知（post_type = "notice", notice_type = "notify", sub_type = "gray_tip"）
     GroupGrayTip(GroupGrayTipNotice),
 
     /// 好友添加请求（post_type = "request", request_type = "friend"）
@@ -111,6 +111,18 @@ pub enum OneBotEvent {
 
     /// 心跳元事件（post_type = "meta_event", meta_event_type = "heartbeat"）
     Heartbeat(HeartbeatEvent),
+
+    /// 私聊消息发送事件（post_type = "message_sent", message_type = "private"）
+    ///
+    /// 当 bot 自身发送私聊消息时触发，数据结构与 PrivateMessageEvent 完全相同，
+    /// 仅 post_type 不同（"message_sent" 而非 "message"）。
+    PrivateMessageSent(PrivateMessageEvent),
+
+    /// 群聊消息发送事件（post_type = "message_sent", message_type = "group"）
+    ///
+    /// 当 bot 自身发送群聊消息时触发，数据结构与 GroupMessageEvent 完全相同，
+    /// 仅 post_type 不同（"message_sent" 而非 "message"）。
+    GroupMessageSent(GroupMessageEvent),
 
     /// 未知事件（兜底变体，捕获所有无法匹配已知类型的事件 JSON）
     Unknown(Value),
@@ -146,6 +158,9 @@ impl Serialize for OneBotEvent {
             // 元事件：委托给对应元事件结构体序列化
             OneBotEvent::Lifecycle(e) => e.serialize(serializer),
             OneBotEvent::Heartbeat(e) => e.serialize(serializer),
+            // 消息发送事件（bot 自身发送）：委托给对应消息事件结构体序列化
+            OneBotEvent::PrivateMessageSent(e) => e.serialize(serializer),
+            OneBotEvent::GroupMessageSent(e) => e.serialize(serializer),
             // 未知事件：直接序列化原始 JSON 值
             OneBotEvent::Unknown(v) => v.serialize(serializer),
         }
@@ -200,6 +215,34 @@ impl<'de> Deserialize<'de> for OneBotEvent {
                         let event = serde_json::from_value(value.clone())
                             .map_err(serde::de::Error::custom)?;
                         Ok(OneBotEvent::GroupMessage(event))
+                    }
+                    // 未知的 message_type：作为 Unknown 保留
+                    _ => Ok(OneBotEvent::Unknown(value)),
+                }
+            }
+
+            // ========== 消息发送事件（bot 自身发送的消息回调） ==========
+            // NapCatQQ 在 bot 自身发送消息时会推送 post_type = "message_sent" 的事件，
+            // 其数据结构与普通 message 事件完全相同，仅 post_type 字段不同。
+            "message_sent" => {
+                // 读取 message_type 字段区分私聊和群聊（与 message 事件逻辑一致）
+                let message_type = value
+                    .get("message_type")       // 获取 message_type 字段
+                    .and_then(|v| v.as_str())  // 转换为字符串
+                    .unwrap_or("");            // 默认为空串
+
+                match message_type {
+                    // bot 发送的私聊消息：反序列化为 PrivateMessageEvent，包装为 PrivateMessageSent
+                    "private" => {
+                        let event = serde_json::from_value(value.clone())
+                            .map_err(serde::de::Error::custom)?;
+                        Ok(OneBotEvent::PrivateMessageSent(event))
+                    }
+                    // bot 发送的群聊消息：反序列化为 GroupMessageEvent，包装为 GroupMessageSent
+                    "group" => {
+                        let event = serde_json::from_value(value.clone())
+                            .map_err(serde::de::Error::custom)?;
+                        Ok(OneBotEvent::GroupMessageSent(event))
                     }
                     // 未知的 message_type：作为 Unknown 保留
                     _ => Ok(OneBotEvent::Unknown(value)),
@@ -272,15 +315,15 @@ impl<'de> Deserialize<'de> for OneBotEvent {
                                     .map_err(serde::de::Error::custom)?;
                                 Ok(OneBotEvent::Poke(event))
                             }
+                            // 群灰色提示条通知（NapCat 扩展）
+                            "gray_tip" => {
+                                let event = serde_json::from_value(value.clone())
+                                    .map_err(serde::de::Error::custom)?;
+                                Ok(OneBotEvent::GroupGrayTip(event))
+                            }
                             // 其他未知的 notify 子类型：作为 Unknown 保留
                             _ => Ok(OneBotEvent::Unknown(value)),
                         }
-                    }
-                    // 群灰色提示条通知（NapCat 扩展）
-                    "group_gray_tip" => {
-                        let event = serde_json::from_value(value.clone())
-                            .map_err(serde::de::Error::custom)?;
-                        Ok(OneBotEvent::GroupGrayTip(event))
                     }
                     // 未知的 notice_type：作为 Unknown 保留
                     _ => Ok(OneBotEvent::Unknown(value)),

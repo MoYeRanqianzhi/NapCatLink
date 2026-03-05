@@ -155,6 +155,12 @@ struct ConnectionActor {
     cmd_rx: mpsc::Receiver<ConnectionCommand>,
     /// 心跳通知接收端 — 接收来自 HeartbeatService 的通知
     heartbeat_notification_rx: Option<mpsc::Receiver<HeartbeatNotification>>,
+    /// 上次成功连接的时间戳（用于检测"连接后立即断开"的模式）
+    last_connected_at: Option<std::time::Instant>,
+    /// 连续快速断开次数（连接后 5 秒内就断开）
+    rapid_close_count: u32,
+    /// 最近收到的 Close 帧的 close code（用于判断是否应该重连）
+    last_close_code: Option<u16>,
 }
 
 impl ConnectionActor {
@@ -201,6 +207,12 @@ impl ConnectionActor {
             cmd_rx,
             // 初始无心跳通知接收端
             heartbeat_notification_rx: None,
+            // 初始无连接时间戳
+            last_connected_at: None,
+            // 初始快速断开计数为 0
+            rapid_close_count: 0,
+            // 初始无 close code
+            last_close_code: None,
         };
 
         // 在独立的 tokio task 中运行 Actor 事件循环
@@ -245,6 +257,10 @@ impl ConnectionActor {
                         Some(ConnectionCommand::Disconnect) => {
                             // 执行断开逻辑
                             self.handle_disconnect();
+                            // 发送状态变化通知到外部监听者
+                            let _ = self.notification_tx.send(
+                                ConnectionNotification::StateChanged(ConnectionState::Disconnected)
+                            ).await;
                             // 清空 WebSocket 读取端
                             ws_reader = None;
                         }
@@ -258,6 +274,10 @@ impl ConnectionActor {
                             info!("ConnectionActor: 命令 channel 已关闭，退出事件循环");
                             // 执行清理并退出
                             self.handle_disconnect();
+                            // 发送状态变化通知到外部监听者
+                            let _ = self.notification_tx.send(
+                                ConnectionNotification::StateChanged(ConnectionState::Disconnected)
+                            ).await;
                             break;
                         }
                     }
@@ -350,6 +370,14 @@ impl ConnectionActor {
         &mut self,
         reply: oneshot::Sender<Result<()>>,
     ) -> Option<SplitStream<WsStream>> {
+        // 防止重复连接 — 如果已在连接中或已连接，直接返回错误
+        if self.state == ConnectionState::Connecting || self.state == ConnectionState::Connected {
+            let _ = reply.send(Err(NapLinkError::Connection(
+                "已在连接中或已连接，请勿重复调用 connect()".to_string()
+            )));
+            return None;
+        }
+
         // 更新状态为"连接中"并通知外部
         self.set_state(ConnectionState::Connecting).await;
 
@@ -405,6 +433,13 @@ impl ConnectionActor {
 
                 // 启动心跳服务
                 self.start_heartbeat();
+
+                // 记录连接成功时间，用于快速断开检测
+                self.last_connected_at = Some(std::time::Instant::now());
+                // 首次连接重置快速断开计数
+                self.rapid_close_count = 0;
+                // 清除上次的 close code
+                self.last_close_code = None;
 
                 // 更新状态为已连接
                 self.set_state(ConnectionState::Connected).await;
@@ -519,8 +554,8 @@ impl ConnectionActor {
             // 收到 Close 帧 — 服务端主动关闭连接
             WsMessage::Close(frame) => {
                 info!("收到 WebSocket Close 帧: {:?}", frame);
-                // Close 帧会由外部循环中的 None 或 Error 触发重连
-                // 此处不需要额外处理
+                // 保存 close code，供 handle_ws_close 判断是否需要重连
+                self.last_close_code = frame.as_ref().map(|f| f.code.into());
             }
             // 收到 Ping 帧 — tokio-tungstenite 会自动回复 Pong
             WsMessage::Ping(_) => {
@@ -554,6 +589,47 @@ impl ConnectionActor {
         self.ws_writer = None;
         // 清空心跳通知接收端
         self.heartbeat_notification_rx = None;
+
+        // === Close code 检查 ===
+        // Close code 1000 表示正常关闭（服务端主动断开），不应重连
+        if self.last_close_code == Some(1000) {
+            info!("服务端正常关闭连接 (code 1000)，不进行重连");
+            self.set_state(ConnectionState::Disconnected).await;
+            return None;
+        }
+
+        // === 快速断开检测 ===
+        // 如果连接后极短时间内就断开（< 5秒），说明服务端在拒绝连接
+        // （常见原因：token 验证失败、服务端配置问题）
+        // 连续发生 3 次后停止重连，避免无限循环
+        const RAPID_CLOSE_THRESHOLD: Duration = Duration::from_secs(5);
+        const MAX_RAPID_CLOSES: u32 = 3;
+
+        if let Some(connected_at) = self.last_connected_at {
+            let elapsed = connected_at.elapsed();
+            if elapsed < RAPID_CLOSE_THRESHOLD {
+                self.rapid_close_count += 1;
+                warn!(
+                    "连接后 {}ms 内即断开（第 {}/{} 次快速断开）",
+                    elapsed.as_millis(),
+                    self.rapid_close_count,
+                    MAX_RAPID_CLOSES
+                );
+
+                if self.rapid_close_count >= MAX_RAPID_CLOSES {
+                    error!(
+                        "连续 {} 次连接后立即被服务端关闭，停止重连。\
+                        请检查：1) access_token 是否正确  2) 服务端配置是否正确  3) 服务端日志",
+                        self.rapid_close_count
+                    );
+                    self.set_state(ConnectionState::Disconnected).await;
+                    return None;
+                }
+            } else {
+                // 连接持续了足够久才断开，重置快速断开计数
+                self.rapid_close_count = 0;
+            }
+        }
 
         // 检查是否有剩余的重连机会
         if let Some(delay) = self.reconnect_svc.next_delay() {
@@ -651,21 +727,32 @@ impl ConnectionActor {
                     // 启动心跳服务
                     self.start_heartbeat();
 
+                    // 记录重连成功时间，用于快速断开检测
+                    self.last_connected_at = Some(std::time::Instant::now());
+                    // 清除上次的 close code
+                    self.last_close_code = None;
+
                     // 更新状态为已连接
                     self.set_state(ConnectionState::Connected).await;
 
-                    // 发送连接恢复通知
-                    let timestamp = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_millis() as u64;
-                    let _ = self
-                        .notification_tx
-                        .send(ConnectionNotification::ConnectionRestored { timestamp })
-                        .await;
+                    // 仅当之前处于重连状态时才发送 ConnectionRestored 通知
+                    // 避免在非重连场景（如首次连接）中误发恢复通知
+                    if self.was_reconnecting {
+                        // 获取当前 UNIX 时间戳（毫秒）
+                        let timestamp = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis() as u64;
+                        // 发送连接恢复通知
+                        let _ = self
+                            .notification_tx
+                            .send(ConnectionNotification::ConnectionRestored { timestamp })
+                            .await;
+                        // 重置重连标记
+                        self.was_reconnecting = false;
+                    }
 
-                    // 重置重连状态和计数器
-                    self.was_reconnecting = false;
+                    // 重置重连计数器
                     self.reconnect_svc.reset();
 
                     // 返回 WebSocket 读取端
@@ -704,12 +791,30 @@ impl ConnectionActor {
     /// 根据配置创建心跳 ping payload（OneBot API 请求 JSON），
     /// 然后启动 HeartbeatService。
     fn start_heartbeat(&mut self) {
+        // 如果心跳间隔为 0，表示心跳已禁用，不启动服务
+        if self.config.connection.ping_interval_ms == 0 {
+            debug!("心跳已禁用 (ping_interval_ms: 0)");
+            return;
+        }
+
         // 构建心跳 ping 的 JSON payload（OneBot API 请求格式）
+        // 必须包含 echo 字段且以 "heartbeat_" 开头，
+        // 这样 Dispatcher 才能识别出心跳响应并忽略它
+        //
+        // 使用动态时间戳作为 echo 后缀（与 TS 版本 `heartbeat_${Date.now()}` 一致），
+        // 确保每次心跳的 echo 值唯一，避免与 API 响应匹配器冲突
+        let heartbeat_timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
         let ping_payload = serde_json::json!({
             // 调用的 API 方法名（默认 get_status）
             "action": self.config.connection.heartbeat_action.action,
             // API 参数（默认空对象）
             "params": self.config.connection.heartbeat_action.params,
+            // 心跳专用 echo 标识 — 格式: "heartbeat_{时间戳毫秒}"
+            // Dispatcher 会跳过以 "heartbeat_" 开头的响应
+            "echo": format!("heartbeat_{}", heartbeat_timestamp),
         })
         .to_string();
 

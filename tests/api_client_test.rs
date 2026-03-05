@@ -197,13 +197,13 @@ async fn test_dispatcher_routes_event() {
     dispatcher.dispatch(&message_str);
 
     // 订阅者应收到由 EventRouter 路由的事件
-    // 消息事件会产生多个层级事件: message, message.group, message.group.normal, raw
+    // 消息事件只发布最具体层级 + raw
     let received = sub.recv().await;
     assert!(received.is_some(), "应该收到事件");
 
-    // 验证收到的第一个事件是 "message"（EventRouter 首先发布第一层级）
+    // 验证收到的第一个事件是最具体的层级 "message.group.normal"
     let event = received.unwrap();
-    assert_eq!(event.name, "message", "第一个事件应该是 'message'");
+    assert_eq!(event.name, "message.group.normal", "第一个事件应该是最具体层级 'message.group.normal'");
 }
 
 /// 测试 5：API 响应路由 — 有 echo 字段的消息被路由到 ApiClient

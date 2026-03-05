@@ -397,6 +397,7 @@ impl MessageApi {
     /// - `group_id`: 群号
     /// - `message_seq`: 起始消息序号（可选，为 None 时从最新消息开始）
     /// - `count`: 获取条数（可选，默认由服务端决定）
+    /// - `reverse_order`: 是否倒序返回（可选，true=从旧到新，false=从新到旧）
     ///
     /// # 返回值
     ///
@@ -406,6 +407,7 @@ impl MessageApi {
         group_id: i64,
         message_seq: Option<i64>,
         count: Option<i32>,
+        reverse_order: Option<bool>,
     ) -> Result<Value> {
         // 构建请求参数 JSON 对象
         let mut params = json!({
@@ -418,6 +420,10 @@ impl MessageApi {
         // 如果指定了获取条数，添加到参数中
         if let Some(c) = count {
             params["count"] = json!(c);
+        }
+        // 如果指定了是否倒序返回，添加到参数中
+        if let Some(ro) = reverse_order {
+            params["reverse_order"] = json!(ro);
         }
         // 调用 get_group_msg_history action
         self.client.call("get_group_msg_history", params).await
@@ -432,6 +438,7 @@ impl MessageApi {
     /// - `user_id`: 好友 QQ 号
     /// - `message_seq`: 起始消息序号（可选，为 None 时从最新消息开始）
     /// - `count`: 获取条数（可选，默认由服务端决定）
+    /// - `reverse_order`: 是否倒序返回（可选，true=从旧到新，false=从新到旧）
     ///
     /// # 返回值
     ///
@@ -441,6 +448,7 @@ impl MessageApi {
         user_id: i64,
         message_seq: Option<i64>,
         count: Option<i32>,
+        reverse_order: Option<bool>,
     ) -> Result<Value> {
         // 构建请求参数 JSON 对象
         let mut params = json!({
@@ -453,6 +461,10 @@ impl MessageApi {
         // 如果指定了获取条数，添加到参数中
         if let Some(c) = count {
             params["count"] = json!(c);
+        }
+        // 如果指定了是否倒序返回，添加到参数中
+        if let Some(ro) = reverse_order {
+            params["reverse_order"] = json!(ro);
         }
         // 调用 get_friend_msg_history action
         self.client.call("get_friend_msg_history", params).await
@@ -491,7 +503,8 @@ impl MessageApi {
     /// # 参数
     ///
     /// - `message_id`: 消息 ID
-    /// - `emoji_id`: 表情 ID（例如 "128516"）
+    /// - `emoji_id`: 表情 ID（数值类型，例如 128516，与 TS 版 emojiId: number 一致）
+    /// - `set`: 是否设置表情回应（true=添加, false=取消）
     ///
     /// # 返回值
     ///
@@ -499,12 +512,14 @@ impl MessageApi {
     pub async fn set_msg_emoji_like(
         &self,
         message_id: i64,
-        emoji_id: &str,
+        emoji_id: i64,
+        set: bool,
     ) -> Result<Value> {
-        // 调用 set_msg_emoji_like action，传入消息 ID 和表情 ID
+        // 调用 set_msg_emoji_like action，传入消息 ID、表情 ID（数值）和设置标志
         self.client.call("set_msg_emoji_like", json!({
             "message_id": message_id,
             "emoji_id": emoji_id,
+            "set": set,
         })).await
     }
 
@@ -517,6 +532,10 @@ impl MessageApi {
     /// - `message_id`: 消息 ID
     /// - `emoji_id`: 表情 ID
     /// - `emoji_type`: 表情类型
+    /// - `group_id`: 群号（可选，群聊消息时传入）
+    /// - `user_id`: 用户 QQ 号（可选，私聊消息时传入）
+    /// - `count`: 获取条数（可选，默认由服务端决定）
+    /// - `cookie`: 分页 cookie（可选，用于翻页查询）
     ///
     /// # 返回值
     ///
@@ -526,13 +545,35 @@ impl MessageApi {
         message_id: i64,
         emoji_id: &str,
         emoji_type: &str,
+        group_id: Option<i64>,
+        user_id: Option<i64>,
+        count: Option<i32>,
+        cookie: Option<&str>,
     ) -> Result<Value> {
-        // 调用 fetch_emoji_like action，传入消息 ID、表情 ID 和类型
-        self.client.call("fetch_emoji_like", json!({
+        // 构建基本请求参数（注意：emojiId 和 emojiType 使用 camelCase 格式）
+        let mut params = json!({
             "message_id": message_id,
-            "emoji_id": emoji_id,
-            "emoji_type": emoji_type,
-        })).await
+            "emojiId": emoji_id,
+            "emojiType": emoji_type,
+        });
+        // 如果指定了群号，添加到参数中
+        if let Some(gid) = group_id {
+            params["group_id"] = json!(gid);
+        }
+        // 如果指定了用户 ID，添加到参数中
+        if let Some(uid) = user_id {
+            params["user_id"] = json!(uid);
+        }
+        // 如果指定了获取条数，添加到参数中
+        if let Some(c) = count {
+            params["count"] = json!(c);
+        }
+        // 如果指定了分页 cookie，添加到参数中
+        if let Some(ck) = cookie {
+            params["cookie"] = json!(ck);
+        }
+        // 调用 fetch_emoji_like action
+        self.client.call("fetch_emoji_like", params).await
     }
 
     // ========================================================================
@@ -596,14 +637,19 @@ impl MessageApi {
         user_id: i64,
         group_id: Option<i64>,
     ) -> Result<Value> {
-        // 构建请求参数 JSON 对象
-        let mut params = json!({
-            "user_id": user_id,
-        });
-        // 如果指定了群号，添加到参数中（表示群内戳一戳）
-        if let Some(gid) = group_id {
-            params["group_id"] = json!(gid);
-        }
+        // 根据是否传入群号构建不同的请求参数
+        let params = if let Some(gid) = group_id {
+            // 群内戳一戳：使用 group_id 和 target_id（而非 user_id）
+            json!({
+                "group_id": gid,
+                "target_id": user_id,
+            })
+        } else {
+            // 好友戳一戳：仅使用 user_id
+            json!({
+                "user_id": user_id,
+            })
+        };
         // 调用 send_poke action
         self.client.call("send_poke", params).await
     }

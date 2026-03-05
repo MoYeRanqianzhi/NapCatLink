@@ -139,29 +139,30 @@ async fn test_event_router_message_routing() {
 
     // 收集所有路由产生的事件名称
     let mut event_names = Vec::new();
-    // 消息事件应产生 4 个事件: message, message.group, message.group.normal, raw
-    for _ in 0..4 {
+    // 消息事件只发布最具体层级 + raw，共 2 个事件
+    for _ in 0..2 {
         if let Some(event) = sub.recv().await {
             event_names.push(event.name);
         }
     }
 
-    // 验证所有层级的事件名都已生成
-    assert!(
-        event_names.contains(&"message".to_string()),
-        "应包含第一层级 'message' 事件"
-    );
-    assert!(
-        event_names.contains(&"message.group".to_string()),
-        "应包含第二层级 'message.group' 事件"
-    );
+    // 验证只发布了最具体的层级事件和 raw
     assert!(
         event_names.contains(&"message.group.normal".to_string()),
-        "应包含第三层级 'message.group.normal' 事件"
+        "应包含最具体层级 'message.group.normal' 事件"
     );
     assert!(
         event_names.contains(&"raw".to_string()),
         "应包含 'raw' 事件"
+    );
+    // 不应再包含中间层级
+    assert!(
+        !event_names.contains(&"message".to_string()),
+        "不应包含顶层 'message' 事件（只发布最具体层级）"
+    );
+    assert!(
+        !event_names.contains(&"message.group".to_string()),
+        "不应包含中间层 'message.group' 事件（只发布最具体层级）"
     );
 }
 
@@ -189,25 +190,17 @@ async fn test_event_router_notice_routing() {
 
     // 收集所有路由产生的事件名称
     let mut event_names = Vec::new();
-    // 通知事件应产生 4 个事件: notice, notice.group_increase, notice.group_increase.approve, raw
-    for _ in 0..4 {
+    // 通知事件只发布最具体层级 + raw，共 2 个事件
+    for _ in 0..2 {
         if let Some(event) = sub.recv().await {
             event_names.push(event.name);
         }
     }
 
-    // 验证所有层级的事件名都已生成
-    assert!(
-        event_names.contains(&"notice".to_string()),
-        "应包含第一层级 'notice' 事件"
-    );
-    assert!(
-        event_names.contains(&"notice.group_increase".to_string()),
-        "应包含第二层级 'notice.group_increase' 事件"
-    );
+    // 验证只发布了最具体的层级事件和 raw
     assert!(
         event_names.contains(&"notice.group_increase.approve".to_string()),
-        "应包含第三层级 'notice.group_increase.approve' 事件"
+        "应包含最具体层级 'notice.group_increase.approve' 事件"
     );
     assert!(
         event_names.contains(&"raw".to_string()),
@@ -240,25 +233,17 @@ async fn test_event_router_request_routing() {
 
     // 收集所有路由产生的事件名称
     let mut event_names = Vec::new();
-    // 请求事件应产生 4 个事件: request, request.group, request.group.invite, raw
-    for _ in 0..4 {
+    // 请求事件只发布最具体层级 + raw，共 2 个事件
+    for _ in 0..2 {
         if let Some(event) = sub.recv().await {
             event_names.push(event.name);
         }
     }
 
-    // 验证所有层级的事件名都已生成
-    assert!(
-        event_names.contains(&"request".to_string()),
-        "应包含第一层级 'request' 事件"
-    );
-    assert!(
-        event_names.contains(&"request.group".to_string()),
-        "应包含第二层级 'request.group' 事件"
-    );
+    // 验证只发布了最具体的层级事件和 raw
     assert!(
         event_names.contains(&"request.group.invite".to_string()),
-        "应包含第三层级 'request.group.invite' 事件"
+        "应包含最具体层级 'request.group.invite' 事件"
     );
     assert!(
         event_names.contains(&"raw".to_string()),
@@ -288,26 +273,17 @@ async fn test_event_router_meta_event_routing() {
 
     // 收集所有路由产生的事件名称
     let mut event_names = Vec::new();
-    // lifecycle 元事件应产生 4 个事件:
-    // meta_event, meta_event.lifecycle, meta_event.lifecycle.connect, raw
-    for _ in 0..4 {
+    // lifecycle 元事件只发布最具体层级 + raw，共 2 个事件
+    for _ in 0..2 {
         if let Some(event) = sub.recv().await {
             event_names.push(event.name);
         }
     }
 
-    // 验证所有层级的事件名都已生成
-    assert!(
-        event_names.contains(&"meta_event".to_string()),
-        "应包含第一层级 'meta_event' 事件"
-    );
-    assert!(
-        event_names.contains(&"meta_event.lifecycle".to_string()),
-        "应包含第二层级 'meta_event.lifecycle' 事件"
-    );
+    // 验证只发布了最具体的层级事件和 raw
     assert!(
         event_names.contains(&"meta_event.lifecycle.connect".to_string()),
-        "应包含第三层级 'meta_event.lifecycle.connect' 事件"
+        "应包含最具体层级 'meta_event.lifecycle.connect' 事件"
     );
     assert!(
         event_names.contains(&"raw".to_string()),

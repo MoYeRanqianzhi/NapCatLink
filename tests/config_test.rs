@@ -30,10 +30,10 @@ fn test_builder_minimal() {
     // 验证重连配置的默认值
     // 默认启用自动重连
     assert!(config.reconnect.enabled);
-    // 默认最大重连 5 次
-    assert_eq!(config.reconnect.max_attempts, 5);
-    // 默认初始退避 5000ms
-    assert_eq!(config.reconnect.backoff.initial_ms, 5000);
+    // 默认最大重连 10 次（与 TS 版一致）
+    assert_eq!(config.reconnect.max_attempts, 10);
+    // 默认初始退避 1000ms（与 TS 版一致）
+    assert_eq!(config.reconnect.backoff.initial_ms, 1000);
     // 默认最大退避 60000ms
     assert_eq!(config.reconnect.backoff.max_ms, 60000);
     // 默认退避乘数 2.0
@@ -44,10 +44,10 @@ fn test_builder_minimal() {
     assert_eq!(config.logging.level, LogLevel::Info);
 
     // 验证 API 配置的默认值
-    // API 超时默认 15000ms
-    assert_eq!(config.api.timeout_ms, 15000);
-    // API 重试默认 2 次
-    assert_eq!(config.api.retries, 2);
+    // API 超时默认 30000ms（与 TS 版一致）
+    assert_eq!(config.api.timeout_ms, 30000);
+    // API 重试默认 3 次（与 TS 版一致）
+    assert_eq!(config.api.retries, 3);
 }
 
 /// 测试使用全部参数构建配置

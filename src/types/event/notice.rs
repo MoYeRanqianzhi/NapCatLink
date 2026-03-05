@@ -367,7 +367,7 @@ pub struct PokeNotice {
 /// 群灰色提示条通知事件
 ///
 /// 群聊中的灰色系统提示消息（如成员入群提示、群公告变更等）。
-/// 这是 NapCat 扩展的通知类型。
+/// 这是 NapCat 扩展的通知类型，notice_type 为 "notify"，sub_type 为 "gray_tip"。
 ///
 /// ## JSON 示例
 ///
@@ -376,9 +376,14 @@ pub struct PokeNotice {
 ///     "time": 1700000000,
 ///     "self_id": 123456789,
 ///     "post_type": "notice",
-///     "notice_type": "group_gray_tip",
+///     "notice_type": "notify",
+///     "sub_type": "gray_tip",
 ///     "group_id": 100200300,
-///     "content": "欢迎新成员加入群聊"
+///     "user_id": 987654321,
+///     "content": "欢迎新成员加入群聊",
+///     "message_id": 1001,
+///     "busi_id": "10",
+///     "raw_info": null
 /// }
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -392,13 +397,30 @@ pub struct GroupGrayTipNotice {
     /// 上报类型，固定为 "notice"
     pub post_type: String,
 
-    /// 通知类型，固定为 "group_gray_tip"
+    /// 通知类型，固定为 "notify"
     pub notice_type: String,
+
+    /// 通知子类型，固定为 "gray_tip"
+    pub sub_type: String,
 
     /// 群号
     pub group_id: i64,
 
-    /// 灰条提示内容（可选，某些灰条可能没有文本内容）
+    /// 触发灰条提示的用户 QQ 号
+    pub user_id: i64,
+
+    /// 灰条提示内容
+    pub content: String,
+
+    /// 关联的消息 ID（可选，某些灰条提示可能关联特定消息）
     #[serde(default)]
-    pub content: Option<String>,
+    pub message_id: Option<i64>,
+
+    /// 业务 ID（可选，用于标识灰条提示的业务类型）
+    #[serde(default)]
+    pub busi_id: Option<String>,
+
+    /// 原始信息（可选，包含灰条提示的原始 JSON 数据）
+    #[serde(default)]
+    pub raw_info: Option<serde_json::Value>,
 }

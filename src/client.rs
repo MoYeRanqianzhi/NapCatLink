@@ -410,7 +410,7 @@ impl NapLinkBuilder {
     ///
     /// # 参数
     ///
-    /// - `attempts`: 最大重连次数，默认 5 次
+    /// - `attempts`: 最大重连次数，默认 10 次
     pub fn reconnect_max_attempts(mut self, attempts: u32) -> Self {
         // 代理到内部配置构建器
         self.config_builder = self.config_builder.reconnect_max_attempts(attempts);
@@ -422,7 +422,7 @@ impl NapLinkBuilder {
     ///
     /// # 参数
     ///
-    /// - `ms`: 初始退避时间（毫秒），默认 5000ms
+    /// - `ms`: 初始退避时间（毫秒），默认 1000ms
     pub fn backoff_initial_ms(mut self, ms: u64) -> Self {
         // 代理到内部配置构建器
         self.config_builder = self.config_builder.backoff_initial_ms(ms);

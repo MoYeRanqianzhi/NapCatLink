@@ -1,14 +1,19 @@
 //! # 事件路由模块
 //!
 //! 负责解析 OneBot 11 协议的原始 JSON 事件，并根据事件类型将其路由到
-//! 相应的层级事件名称，通过事件总线进行广播分发。
+//! 最具体的层级事件名称，通过事件总线进行广播分发。
 //!
 //! ## 事件层级结构
 //!
-//! OneBot 11 事件采用层级命名，例如：
-//! - `message` -> `message.group` -> `message.group.normal`
-//! - `notice` -> `notice.group_upload`
-//! - `meta_event` -> `meta_event.lifecycle` -> `meta_event.lifecycle.connect`
+//! OneBot 11 事件采用层级命名，路由器只发布最具体的层级：
+//! - 有 message_type + sub_type: 发布 `message.{message_type}.{sub_type}`
+//! - 仅有 message_type: 发布 `message.{message_type}`
+//! - 两者都没有: 发布 `message`
+//!
+//! 订阅者通过 `recv_filter` 的前缀匹配机制接收所需层级的事件：
+//! - `recv_filter("message")` 匹配所有消息事件
+//! - `recv_filter("message.private")` 匹配所有私聊消息
+//! - `recv_exact("message.private.friend")` 精确匹配好友私聊
 //!
 //! ## 特殊事件
 //!
@@ -24,17 +29,22 @@ use super::bus::EventBus;
 /// 事件路由器 — 解析 OneBot 11 事件 JSON 并分发到层级事件名
 ///
 /// 路由器负责将原始的 OneBot 11 JSON 事件解析为结构化的层级事件名称，
-/// 并通过事件总线进行广播。每条事件会根据其类型产生多个层级的事件发布。
+/// 并通过事件总线进行广播。**每条事件只发布一个最具体的层级事件名**，
+/// 避免订阅者通过 `recv_filter` 前缀匹配时重复接收同一事件。
 ///
 /// # 路由规则
 ///
-/// | post_type    | 层级1         | 层级2                        | 层级3                                  |
-/// |-------------|---------------|------------------------------|----------------------------------------|
-/// | message     | message       | message.{message_type}       | message.{message_type}.{sub_type}      |
-/// | message_sent| message_sent  | message_sent.{message_type}  | message_sent.{message_type}.{sub_type} |
-/// | notice      | notice        | notice.{notice_type}         | notice.{notice_type}.{sub_type}        |
-/// | request     | request       | request.{request_type}       | request.{request_type}.{sub_type}      |
-/// | meta_event  | meta_event    | meta_event.{meta_event_type} | meta_event.lifecycle.{sub_type}        |
+/// 路由器总是选择最具体的层级名称来发布事件：
+///
+/// | post_type    | 最具体层级名称                                 |
+/// |-------------|-----------------------------------------------|
+/// | message     | message.{message_type}.{sub_type}             |
+/// | message_sent| message_sent.{message_type}.{sub_type}        |
+/// | notice      | notice.{notice_type}.{sub_type}               |
+/// | request     | request.{request_type}.{sub_type}             |
+/// | meta_event  | meta_event.lifecycle.{sub_type} 或 meta_event.{meta_event_type} |
+///
+/// 如果某个字段缺失，则使用更粗粒度的层级名称。
 pub struct EventRouter {
     /// 事件总线的共享引用，用于发布路由后的事件
     bus: std::sync::Arc<EventBus>,
@@ -77,9 +87,9 @@ impl EventRouter {
             // 元事件（心跳、生命周期等）
             "meta_event" => self.route_meta_event(&data),
             // 接收到的消息事件
-            "message" => self.route_message(&data),
-            // 自身发送的消息事件
-            "message_sent" => self.route_message_sent(&data),
+            "message" => self.route_message("message", &data),
+            // 自身发送的消息事件（与 message 使用相同逻辑，仅前缀不同）
+            "message_sent" => self.route_message("message_sent", &data),
             // 通知事件（群文件上传、成员变动等）
             "notice" => self.route_notice(&data),
             // 请求事件（加好友、加群等）
@@ -99,8 +109,10 @@ impl EventRouter {
     /// 路由元事件（meta_event）
     ///
     /// 元事件包括心跳（heartbeat）和生命周期（lifecycle）事件。
-    /// 发布层级：`meta_event` -> `meta_event.{meta_event_type}`
-    /// 对于 lifecycle 类型，额外发布：`meta_event.lifecycle.{sub_type}`
+    /// 只发布最具体的层级：
+    /// - lifecycle 有 sub_type: `meta_event.lifecycle.{sub_type}`
+    /// - 其他有 meta_event_type: `meta_event.{meta_event_type}`
+    /// - 均无: `meta_event`
     ///
     /// # 参数
     /// - `data`：元事件的 JSON 数据
@@ -111,109 +123,77 @@ impl EventRouter {
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
-        // 发布第一层级事件: meta_event（所有元事件都会触发）
-        self.bus.publish("meta_event", data.clone());
-
-        // 如果 meta_event_type 不为空，发布第二层级事件
-        if !meta_type.is_empty() {
-            // 发布 meta_event.{meta_event_type}，如 "meta_event.heartbeat"
-            self.bus
-                .publish(format!("meta_event.{}", meta_type), data.clone());
-        }
-
-        // 对于 lifecycle 类型的元事件，额外发布包含 sub_type 的第三层级
+        // 对于 lifecycle 类型，尝试提取 sub_type 以发布最具体的层级
         if meta_type == "lifecycle" {
-            // 尝试提取 sub_type 字段（如 "connect"、"enable"）
             if let Some(sub_type) = data.get("sub_type").and_then(|v| v.as_str()) {
-                // 发布 meta_event.lifecycle.{sub_type}，如 "meta_event.lifecycle.connect"
+                // 发布最具体层级: meta_event.lifecycle.{sub_type}
                 self.bus.publish(
                     format!("meta_event.lifecycle.{}", sub_type),
                     data.clone(),
                 );
+                return;
             }
         }
+
+        // 如果 meta_event_type 不为空，发布第二层级
+        if !meta_type.is_empty() {
+            // 发布 meta_event.{meta_event_type}，如 "meta_event.heartbeat"
+            self.bus
+                .publish(format!("meta_event.{}", meta_type), data.clone());
+            return;
+        }
+
+        // 均无有效字段，发布顶层 meta_event
+        self.bus.publish("meta_event", data.clone());
     }
 
-    /// 路由消息事件（message）
+    /// 路由消息事件（message / message_sent）
     ///
     /// 消息事件包括私聊消息和群聊消息。
-    /// 发布层级：`message` -> `message.{message_type}` -> `message.{message_type}.{sub_type}`
+    /// 只发布最具体的层级：
+    /// - 有 message_type + sub_type: `{prefix}.{message_type}.{sub_type}`
+    /// - 仅有 message_type: `{prefix}.{message_type}`
+    /// - 均无: `{prefix}`
     ///
     /// # 参数
+    /// - `prefix`：事件前缀（"message" 或 "message_sent"）
     /// - `data`：消息事件的 JSON 数据
-    fn route_message(&self, data: &Value) {
+    fn route_message(&self, prefix: &str, data: &Value) {
         // 提取 message_type 字段（如 "private"、"group"），缺失时使用空字符串
         let msg_type = data
             .get("message_type")
             .and_then(|v| v.as_str())
             .unwrap_or("");
-        // 提取 sub_type 字段（如 "normal"、"anonymous"、"notice"），缺失时使用空字符串
+        // 提取 sub_type 字段（如 "normal"、"anonymous"、"friend"），缺失时使用空字符串
         let sub_type = data
             .get("sub_type")
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
-        // 发布第一层级事件: message（所有消息事件都会触发）
-        self.bus.publish("message", data.clone());
-
-        // 如果 message_type 不为空，发布更细粒度的事件
-        if !msg_type.is_empty() {
-            // 发布第二层级事件: message.{message_type}，如 "message.group"
+        // 根据字段存在情况选择最具体的层级发布
+        if !msg_type.is_empty() && !sub_type.is_empty() {
+            // 发布最具体层级: {prefix}.{message_type}.{sub_type}
+            self.bus.publish(
+                format!("{}.{}.{}", prefix, msg_type, sub_type),
+                data.clone(),
+            );
+        } else if !msg_type.is_empty() {
+            // 发布第二层级: {prefix}.{message_type}
             self.bus
-                .publish(format!("message.{}", msg_type), data.clone());
-            // 如果 sub_type 也不为空，发布第三层级事件
-            if !sub_type.is_empty() {
-                // 发布 message.{message_type}.{sub_type}，如 "message.group.normal"
-                self.bus.publish(
-                    format!("message.{}.{}", msg_type, sub_type),
-                    data.clone(),
-                );
-            }
-        }
-    }
-
-    /// 路由消息发送事件（message_sent）
-    ///
-    /// 当机器人自身发送消息时触发。层级结构与 message 相同。
-    /// 发布层级：`message_sent` -> `message_sent.{message_type}` -> `message_sent.{message_type}.{sub_type}`
-    ///
-    /// # 参数
-    /// - `data`：消息发送事件的 JSON 数据
-    fn route_message_sent(&self, data: &Value) {
-        // 提取 message_type 字段（如 "private"、"group"），缺失时使用空字符串
-        let msg_type = data
-            .get("message_type")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        // 提取 sub_type 字段，缺失时使用空字符串
-        let sub_type = data
-            .get("sub_type")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-
-        // 发布第一层级事件: message_sent
-        self.bus.publish("message_sent", data.clone());
-
-        // 如果 message_type 不为空，发布更细粒度的事件
-        if !msg_type.is_empty() {
-            // 发布第二层级事件: message_sent.{message_type}
-            self.bus
-                .publish(format!("message_sent.{}", msg_type), data.clone());
-            // 如果 sub_type 也不为空，发布第三层级事件
-            if !sub_type.is_empty() {
-                // 发布 message_sent.{message_type}.{sub_type}
-                self.bus.publish(
-                    format!("message_sent.{}.{}", msg_type, sub_type),
-                    data.clone(),
-                );
-            }
+                .publish(format!("{}.{}", prefix, msg_type), data.clone());
+        } else {
+            // 均无有效字段，发布顶层
+            self.bus.publish(prefix, data.clone());
         }
     }
 
     /// 路由通知事件（notice）
     ///
     /// 通知事件包括群文件上传、成员增减、群禁言等。
-    /// 发布层级：`notice` -> `notice.{notice_type}` -> `notice.{notice_type}.{sub_type}`
+    /// 只发布最具体的层级：
+    /// - 有 notice_type + sub_type: `notice.{notice_type}.{sub_type}`
+    /// - 仅有 notice_type: `notice.{notice_type}`
+    /// - 均无: `notice`
     ///
     /// # 参数
     /// - `data`：通知事件的 JSON 数据
@@ -229,29 +209,30 @@ impl EventRouter {
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
-        // 发布第一层级事件: notice（所有通知事件都会触发）
-        self.bus.publish("notice", data.clone());
-
-        // 如果 notice_type 不为空，发布更细粒度的事件
-        if !notice_type.is_empty() {
-            // 发布第二层级事件: notice.{notice_type}，如 "notice.group_increase"
+        // 根据字段存在情况选择最具体的层级发布
+        if !notice_type.is_empty() && !sub_type.is_empty() {
+            // 发布最具体层级: notice.{notice_type}.{sub_type}
+            self.bus.publish(
+                format!("notice.{}.{}", notice_type, sub_type),
+                data.clone(),
+            );
+        } else if !notice_type.is_empty() {
+            // 发布第二层级: notice.{notice_type}
             self.bus
                 .publish(format!("notice.{}", notice_type), data.clone());
-            // 如果 sub_type 也不为空，发布第三层级事件
-            if !sub_type.is_empty() {
-                // 发布 notice.{notice_type}.{sub_type}，如 "notice.group_increase.approve"
-                self.bus.publish(
-                    format!("notice.{}.{}", notice_type, sub_type),
-                    data.clone(),
-                );
-            }
+        } else {
+            // 均无有效字段，发布顶层 notice
+            self.bus.publish("notice", data.clone());
         }
     }
 
     /// 路由请求事件（request）
     ///
     /// 请求事件包括加好友请求和加群请求。
-    /// 发布层级：`request` -> `request.{request_type}` -> `request.{request_type}.{sub_type}`
+    /// 只发布最具体的层级：
+    /// - 有 request_type + sub_type: `request.{request_type}.{sub_type}`
+    /// - 仅有 request_type: `request.{request_type}`
+    /// - 均无: `request`
     ///
     /// # 参数
     /// - `data`：请求事件的 JSON 数据
@@ -267,22 +248,20 @@ impl EventRouter {
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
-        // 发布第一层级事件: request（所有请求事件都会触发）
-        self.bus.publish("request", data.clone());
-
-        // 如果 request_type 不为空，发布更细粒度的事件
-        if !req_type.is_empty() {
-            // 发布第二层级事件: request.{request_type}，如 "request.friend"
+        // 根据字段存在情况选择最具体的层级发布
+        if !req_type.is_empty() && !sub_type.is_empty() {
+            // 发布最具体层级: request.{request_type}.{sub_type}
+            self.bus.publish(
+                format!("request.{}.{}", req_type, sub_type),
+                data.clone(),
+            );
+        } else if !req_type.is_empty() {
+            // 发布第二层级: request.{request_type}
             self.bus
                 .publish(format!("request.{}", req_type), data.clone());
-            // 如果 sub_type 也不为空，发布第三层级事件
-            if !sub_type.is_empty() {
-                // 发布 request.{request_type}.{sub_type}，如 "request.group.invite"
-                self.bus.publish(
-                    format!("request.{}.{}", req_type, sub_type),
-                    data.clone(),
-                );
-            }
+        } else {
+            // 均无有效字段，发布顶层 request
+            self.bus.publish("request", data.clone());
         }
     }
 }

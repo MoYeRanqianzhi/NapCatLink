@@ -152,8 +152,8 @@ impl EventSubscription {
         loop {
             // 调用 recv() 获取下一个事件
             match self.recv().await {
-                // 接收到事件且名称以指定前缀开头，返回匹配的事件
-                Some(data) if data.name.starts_with(prefix) => return Some(data),
+                // 接收到事件且名称精确匹配前缀，或名称以 "prefix." 开头（层级匹配），返回匹配的事件
+                Some(data) if data.name == prefix || data.name.starts_with(&format!("{}.", prefix)) => return Some(data),
                 // 接收到事件但名称不匹配，跳过继续等待下一个
                 Some(_) => continue,
                 // channel 已关闭，返回 None

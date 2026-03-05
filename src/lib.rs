@@ -67,8 +67,8 @@ mod util;
 /// 主客户端 — 用户与 SDK 交互的主要入口
 pub use client::NapLink;
 
-/// 配置类型 — SDK 完整配置和日志级别枚举
-pub use config::{NapLinkConfig, LogLevel};
+/// 配置类型 — SDK 完整配置、构建器和日志级别枚举
+pub use config::{NapLinkConfig, NapLinkConfigBuilder, LogLevel};
 
 /// 错误类型 — SDK 统一错误枚举和 Result 类型别名
 pub use error::{NapLinkError, Result};
@@ -84,3 +84,21 @@ pub use connection::ConnectionState;
 
 /// API 聚合器 — 所有 API 模块的统一入口
 pub use api::OneBotApi;
+
+/// OneBot 事件枚举 — 所有 OneBot 11 事件的顶层枚举类型
+pub use types::event::OneBotEvent;
+
+/// 通知事件类型 — 群通知、好友通知等事件的具体结构体
+pub use types::event::notice::{
+    FriendAddNotice, FriendRecallNotice, GroupAdminNotice, GroupDecreaseNotice,
+    GroupGrayTipNotice, GroupIncreaseNotice, GroupRecallNotice, GroupUploadNotice, PokeNotice,
+};
+
+/// 消息事件类型 — 私聊和群聊消息事件的具体结构体
+pub use types::event::message::{GroupMessageEvent, PrivateMessageEvent};
+
+/// 请求事件类型 — 好友请求和群请求事件的具体结构体
+pub use types::event::request::{FriendRequestEvent, GroupRequestEvent};
+
+/// 元事件类型 — 生命周期和心跳事件的具体结构体
+pub use types::event::meta::{HeartbeatEvent, LifecycleEvent};

@@ -56,6 +56,7 @@ impl FileApi {
     /// - `file`: 本地文件路径
     /// - `name`: 上传后的文件显示名称
     /// - `folder`: 目标文件夹 ID（可选，None 表示上传到根目录）
+    /// - `upload_file`: 是否上传文件（可选，用于控制上传行为）
     ///
     /// # 返回值
     ///
@@ -66,6 +67,7 @@ impl FileApi {
         file: &str,
         name: &str,
         folder: Option<&str>,
+        upload_file: Option<bool>,
     ) -> Result<Value> {
         // 构建基本请求参数：群号、文件路径和显示名称
         let mut params = json!({
@@ -77,6 +79,10 @@ impl FileApi {
         if let Some(f) = folder {
             // 设置 folder 字段为目标文件夹 ID
             params["folder"] = json!(f);
+        }
+        // 如果指定了 upload_file 标志，添加到参数中
+        if let Some(uf) = upload_file {
+            params["upload_file"] = json!(uf);
         }
         // 调用 upload_group_file action 发送请求
         self.client.call("upload_group_file", params).await
@@ -91,6 +97,7 @@ impl FileApi {
     /// - `user_id`: 目标用户 QQ 号
     /// - `file`: 本地文件路径
     /// - `name`: 上传后的文件显示名称
+    /// - `upload_file`: 是否上传文件（可选，用于控制上传行为）
     ///
     /// # 返回值
     ///
@@ -100,13 +107,20 @@ impl FileApi {
         user_id: i64,
         file: &str,
         name: &str,
+        upload_file: Option<bool>,
     ) -> Result<Value> {
-        // 调用 upload_private_file action，传入用户 ID、文件路径和文件名
-        self.client.call("upload_private_file", json!({
+        // 构建基本请求参数：用户 ID、文件路径和文件名
+        let mut params = json!({
             "user_id": user_id,
             "file": file,
             "name": name,
-        })).await
+        });
+        // 如果指定了 upload_file 标志，添加到参数中
+        if let Some(uf) = upload_file {
+            params["upload_file"] = json!(uf);
+        }
+        // 调用 upload_private_file action 发送请求
+        self.client.call("upload_private_file", params).await
     }
 
     /// 获取群文件系统信息
@@ -173,7 +187,7 @@ impl FileApi {
     ///
     /// - `group_id`: 群号
     /// - `file_id`: 文件 ID
-    /// - `busid`: 文件类型 ID（bus ID，从文件信息中获取）
+    /// - `busid`: 文件类型 ID（bus ID，可选，从文件信息中获取）
     ///
     /// # 返回值
     ///
@@ -182,14 +196,19 @@ impl FileApi {
         &self,
         group_id: i64,
         file_id: &str,
-        busid: i32,
+        busid: Option<i32>,
     ) -> Result<Value> {
-        // 调用 get_group_file_url action，传入群号、文件 ID 和 bus ID
-        self.client.call("get_group_file_url", json!({
+        // 构建基本请求参数：群号和文件 ID
+        let mut params = json!({
             "group_id": group_id,
             "file_id": file_id,
-            "busid": busid,
-        })).await
+        });
+        // 如果指定了 bus ID，添加到参数中
+        if let Some(bid) = busid {
+            params["busid"] = json!(bid);
+        }
+        // 调用 get_group_file_url action 发送请求
+        self.client.call("get_group_file_url", params).await
     }
 
     /// 删除群文件
@@ -200,7 +219,7 @@ impl FileApi {
     ///
     /// - `group_id`: 群号
     /// - `file_id`: 文件 ID
-    /// - `busid`: 文件类型 ID（bus ID）
+    /// - `busid`: 文件类型 ID（bus ID，可选）
     ///
     /// # 返回值
     ///
@@ -209,14 +228,19 @@ impl FileApi {
         &self,
         group_id: i64,
         file_id: &str,
-        busid: i32,
+        busid: Option<i32>,
     ) -> Result<Value> {
-        // 调用 delete_group_file action，传入群号、文件 ID 和 bus ID
-        self.client.call("delete_group_file", json!({
+        // 构建基本请求参数：群号和文件 ID
+        let mut params = json!({
             "group_id": group_id,
             "file_id": file_id,
-            "busid": busid,
-        })).await
+        });
+        // 如果指定了 bus ID，添加到参数中
+        if let Some(bid) = busid {
+            params["busid"] = json!(bid);
+        }
+        // 调用 delete_group_file action 发送请求
+        self.client.call("delete_group_file", params).await
     }
 
     /// 创建群文件夹
@@ -227,6 +251,7 @@ impl FileApi {
     ///
     /// - `group_id`: 群号
     /// - `name`: 文件夹名称
+    /// - `parent_id`: 父文件夹 ID（可选，None 表示在根目录下创建）
     ///
     /// # 返回值
     ///
@@ -235,12 +260,19 @@ impl FileApi {
         &self,
         group_id: i64,
         name: &str,
+        parent_id: Option<&str>,
     ) -> Result<Value> {
-        // 调用 create_group_file_folder action，传入群号和文件夹名称
-        self.client.call("create_group_file_folder", json!({
+        // 构建基本请求参数：群号和文件夹名称
+        let mut params = json!({
             "group_id": group_id,
             "name": name,
-        })).await
+        });
+        // 如果指定了父文件夹 ID，添加到参数中
+        if let Some(pid) = parent_id {
+            params["parent_id"] = json!(pid);
+        }
+        // 调用 create_group_file_folder action 发送请求
+        self.client.call("create_group_file_folder", params).await
     }
 
     /// 删除群文件夹
@@ -274,7 +306,7 @@ impl FileApi {
     /// # 参数
     ///
     /// - `url`: 文件下载 URL
-    /// - `thread_count`: 下载线程数（可选，服务端决定默认值）
+    /// - `thread_count`: 下载线程数（可选，默认为 3，与 TS 版一致）
     /// - `headers`: 自定义 HTTP 请求头（可选，JSON 格式，如 Cookie、User-Agent 等）
     ///
     /// # 返回值
@@ -286,13 +318,8 @@ impl FileApi {
         thread_count: Option<i32>,
         headers: Option<Value>,
     ) -> Result<Value> {
-        // 构建基本请求参数：文件下载 URL
-        let mut params = json!({"url": url});
-        // 如果指定了下载线程数，添加到参数中
-        if let Some(tc) = thread_count {
-            // 设置 thread_count 字段
-            params["thread_count"] = json!(tc);
-        }
+        // 构建请求参数：文件下载 URL 和线程数（默认 3，与 TS 版 threadCount = 3 一致）
+        let mut params = json!({"url": url, "thread_count": thread_count.unwrap_or(3)});
         // 如果指定了自定义请求头，添加到参数中
         if let Some(h) = headers {
             // 设置 headers 字段（JSON 值，支持数组或对象格式）
@@ -300,5 +327,25 @@ impl FileApi {
         }
         // 调用 download_file action 发送请求
         self.client.call("download_file", params).await
+    }
+
+    /// 设置群头像
+    ///
+    /// 对应 OneBot action: `set_group_portrait`
+    ///
+    /// # 参数
+    ///
+    /// - `group_id`: 群号
+    /// - `file`: 图片文件路径或 URL
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回空数据
+    pub async fn set_group_portrait(&self, group_id: i64, file: &str) -> Result<Value> {
+        // 调用 set_group_portrait action，传入群号和图片文件
+        self.client.call("set_group_portrait", json!({
+            "group_id": group_id,
+            "file": file,
+        })).await
     }
 }

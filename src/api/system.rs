@@ -50,12 +50,22 @@ impl SystemApi {
     ///
     /// 对应 OneBot action: `get_online_clients`
     ///
+    /// # 参数
+    ///
+    /// - `no_cache`: 是否不使用缓存（可选，true 表示强制刷新）
+    ///
     /// # 返回值
     ///
     /// 成功返回在线客户端列表 JSON（包含设备名称和类型信息）
-    pub async fn get_online_clients(&self) -> Result<Value> {
-        // 调用 get_online_clients action，无参数
-        self.client.call("get_online_clients", json!({})).await
+    pub async fn get_online_clients(&self, no_cache: Option<bool>) -> Result<Value> {
+        // 构建基本请求参数（空 JSON 对象）
+        let mut params = json!({});
+        // 如果指定了 no_cache 选项，添加到参数中
+        if let Some(nc) = no_cache {
+            params["no_cache"] = json!(nc);
+        }
+        // 调用 get_online_clients action 发送请求
+        self.client.call("get_online_clients", params).await
     }
 
     /// 获取机器人 QQ 号范围
@@ -100,21 +110,14 @@ impl SystemApi {
     ///
     /// # 参数
     ///
-    /// - `domain`: 目标域名（可选，如 "qzone.qq.com"），None 则获取全部
+    /// - `domain`: 目标域名（如 "qzone.qq.com"）
     ///
     /// # 返回值
     ///
     /// 成功返回 JSON（包含 `cookies` 字符串字段）
-    pub async fn get_cookies(&self, domain: Option<&str>) -> Result<Value> {
-        // 构建基本请求参数（空 JSON 对象）
-        let mut params = json!({});
-        // 如果指定了域名，添加到参数中
-        if let Some(d) = domain {
-            // 设置 domain 字段
-            params["domain"] = json!(d);
-        }
-        // 调用 get_cookies action 发送请求
-        self.client.call("get_cookies", params).await
+    pub async fn get_cookies(&self, domain: &str) -> Result<Value> {
+        // 调用 get_cookies action，传入域名参数
+        self.client.call("get_cookies", json!({"domain": domain})).await
     }
 
     /// 获取 CSRF Token
@@ -137,21 +140,14 @@ impl SystemApi {
     ///
     /// # 参数
     ///
-    /// - `domain`: 目标域名（可选），None 则获取全部
+    /// - `domain`: 目标域名
     ///
     /// # 返回值
     ///
     /// 成功返回 JSON（包含 `cookies` 和 `csrf_token` 字段）
-    pub async fn get_credentials(&self, domain: Option<&str>) -> Result<Value> {
-        // 构建基本请求参数（空 JSON 对象）
-        let mut params = json!({});
-        // 如果指定了域名，添加到参数中
-        if let Some(d) = domain {
-            // 设置 domain 字段
-            params["domain"] = json!(d);
-        }
-        // 调用 get_credentials action 发送请求
-        self.client.call("get_credentials", params).await
+    pub async fn get_credentials(&self, domain: &str) -> Result<Value> {
+        // 调用 get_credentials action，传入域名参数
+        self.client.call("get_credentials", json!({"domain": domain})).await
     }
 
     /// 设置输入状态
@@ -163,7 +159,7 @@ impl SystemApi {
     /// # 参数
     ///
     /// - `user_id`: 目标用户 QQ 号
-    /// - `event_type`: 状态类型字符串（如 "1" 表示正在输入）
+    /// - `event_type`: 状态类型数值（如 1 表示正在输入）
     ///
     /// # 返回值
     ///
@@ -171,29 +167,39 @@ impl SystemApi {
     pub async fn set_input_status(
         &self,
         user_id: i64,
-        event_type: &str,
+        event_type: i64,
     ) -> Result<Value> {
         // 调用 set_input_status action，传入用户 ID 和状态类型
+        // 同时发送 snake_case (event_type) 和 camelCase (eventType) 两种键名以保持兼容性
         self.client.call("set_input_status", json!({
             "user_id": user_id,
             "event_type": event_type,
+            "eventType": event_type,
         })).await
     }
 
     /// OCR 图片识别
     ///
-    /// 对应 OneBot action: `ocr_image`
+    /// 对应 OneBot action: `ocr_image` 或 `.ocr_image`
+    ///
+    /// 当 `dot` 参数为 `true` 时，使用 `.ocr_image` action（带点前缀）；
+    /// 当 `dot` 参数为 `false` 或 `None` 时，使用 `ocr_image` action。
+    /// 此行为与 TS 版 `ocrImage(image, dot = false)` 一致。
     ///
     /// # 参数
     ///
     /// - `image`: 图片文件标识（file 字段值或 URL）
+    /// - `dot`: 是否使用带点前缀的 action（可选，默认 false）
     ///
     /// # 返回值
     ///
     /// 成功返回 OCR 识别结果 JSON（包含 texts 数组等字段）
-    pub async fn ocr_image(&self, image: &str) -> Result<Value> {
-        // 调用 ocr_image action，传入图片标识
-        self.client.call("ocr_image", json!({"image": image})).await
+    pub async fn ocr_image(&self, image: &str, dot: Option<bool>) -> Result<Value> {
+        // 根据 dot 参数决定使用哪个 action 名称
+        // dot=true 时使用 ".ocr_image"（带点前缀），否则使用 "ocr_image"
+        let action = if dot.unwrap_or(false) { ".ocr_image" } else { "ocr_image" };
+        // 调用对应的 action，传入图片标识
+        self.client.call(action, json!({"image": image})).await
     }
 
     /// 英文翻译为中文
@@ -267,5 +273,38 @@ impl SystemApi {
     pub async fn nc_get_packet_status(&self) -> Result<Value> {
         // 调用 nc_get_packet_status action，无参数
         self.client.call("nc_get_packet_status", json!({})).await
+    }
+
+    /// 获取机型展示信息
+    ///
+    /// 对应 OneBot action: `_get_model_show`（注意前缀下划线）
+    ///
+    /// # 参数
+    ///
+    /// - `model`: 机型标识字符串
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回机型展示信息 JSON
+    pub async fn get_model_show(&self, model: &str) -> Result<Value> {
+        // 调用 _get_model_show action，传入机型标识
+        self.client.call("_get_model_show", json!({"model": model})).await
+    }
+
+    /// 设置机型展示信息
+    ///
+    /// 对应 OneBot action: `_set_model_show`（注意前缀下划线）
+    ///
+    /// # 参数
+    ///
+    /// - `model`: 机型标识字符串
+    /// - `model_show`: 要展示的机型名称
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回空数据
+    pub async fn set_model_show(&self, model: &str, model_show: &str) -> Result<Value> {
+        // 调用 _set_model_show action，传入机型标识和展示名称
+        self.client.call("_set_model_show", json!({"model": model, "model_show": model_show})).await
     }
 }

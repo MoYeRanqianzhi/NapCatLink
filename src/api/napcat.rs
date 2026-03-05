@@ -65,6 +65,21 @@ impl NapCatApi {
         self.client.call("get_rkey", json!({})).await
     }
 
+    /// 获取 Rkey（别名方法）
+    ///
+    /// 对应 OneBot action: `get_rkey`（与 `get_rkey` 相同的 action）
+    ///
+    /// 此方法为 TS 版 `getRkeyEx()` 的对应实现，
+    /// 在 TS 版中 `getRkeyEx` 同样映射到 `get_rkey` action。
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 Rkey 信息 JSON
+    pub async fn get_rkey_ex(&self) -> Result<Value> {
+        // 调用 get_rkey action，无参数（与 get_rkey 方法使用相同的 action）
+        self.client.call("get_rkey", json!({})).await
+    }
+
     /// 从服务器获取 Rkey
     ///
     /// 对应 OneBot action: `get_rkey_server`
@@ -157,8 +172,9 @@ impl NapCatApi {
     ///
     /// 成功返回空数据
     pub async fn set_group_remark(&self, group_id: i64, remark: &str) -> Result<Value> {
-        // 调用 set_group_remark action，传入群号和备注
-        self.client.call("set_group_remark", json!({"group_id": group_id, "remark": remark})).await
+        // TS 版使用 String(groupId) 将群号转为字符串发送
+        // 调用 set_group_remark action，传入字符串类型的群号和备注
+        self.client.call("set_group_remark", json!({"group_id": group_id.to_string(), "remark": remark})).await
     }
 
     /// 获取群扩展信息
@@ -197,16 +213,14 @@ impl NapCatApi {
     ///
     /// 对应 OneBot action: `get_group_ignored_notifies`
     ///
-    /// # 参数
-    ///
-    /// - `group_id`: 群号
+    /// 此 API 无需参数，服务端将返回所有被忽略的群通知。
     ///
     /// # 返回值
     ///
     /// 成功返回被忽略通知列表 JSON
-    pub async fn get_group_ignored_notifies(&self, group_id: i64) -> Result<Value> {
-        // 调用 get_group_ignored_notifies action，传入群号
-        self.client.call("get_group_ignored_notifies", json!({"group_id": group_id})).await
+    pub async fn get_group_ignored_notifies(&self) -> Result<Value> {
+        // 调用 get_group_ignored_notifies action，无参数
+        self.client.call("get_group_ignored_notifies", json!({})).await
     }
 
     /// 获取群禁言列表
@@ -237,13 +251,43 @@ impl NapCatApi {
     ///
     /// - `user_id`: 目标用户 QQ 号
     /// - `messages`: 合并转发节点消息 JSON 数组
+    /// - `news`: 转发消息摘要新闻条目（可选，自定义转发卡片预览）
+    /// - `prompt`: 转发消息提示文本（可选，如 "[聊天记录]"）
+    /// - `summary`: 转发消息摘要文本（可选，如 "查看 3 条转发消息"）
+    /// - `source`: 转发消息来源标签（可选，如 "聊天记录"）
     ///
     /// # 返回值
     ///
     /// 成功返回包含 `message_id` 的 JSON 数据
-    pub async fn send_private_forward_msg(&self, user_id: i64, messages: Value) -> Result<Value> {
-        // 调用 send_private_forward_msg action，传入用户 ID 和转发节点
-        self.client.call("send_private_forward_msg", json!({"user_id": user_id, "messages": messages})).await
+    pub async fn send_private_forward_msg(
+        &self,
+        user_id: i64,
+        messages: Value,
+        news: Option<Value>,
+        prompt: Option<&str>,
+        summary: Option<&str>,
+        source: Option<&str>,
+    ) -> Result<Value> {
+        // 构建基本请求参数：用户 ID 和转发节点
+        let mut params = json!({"user_id": user_id, "messages": messages});
+        // 如果指定了新闻摘要条目，添加到参数中
+        if let Some(n) = news {
+            params["news"] = n;
+        }
+        // 如果指定了提示文本，添加到参数中
+        if let Some(p) = prompt {
+            params["prompt"] = json!(p);
+        }
+        // 如果指定了摘要文本，添加到参数中
+        if let Some(s) = summary {
+            params["summary"] = json!(s);
+        }
+        // 如果指定了来源标签，添加到参数中
+        if let Some(src) = source {
+            params["source"] = json!(src);
+        }
+        // 调用 send_private_forward_msg action 发送请求
+        self.client.call("send_private_forward_msg", params).await
     }
 
     /// 转发单条好友消息
@@ -313,6 +357,11 @@ impl NapCatApi {
     /// - `group_id`: 群号
     /// - `content`: 公告内容
     /// - `image`: 公告图片 URL（可选）
+    /// - `pinned`: 是否置顶（可选，0 = 不置顶，1 = 置顶）
+    /// - `notice_type`: 公告类型（可选，对应 JSON 字段 "type"）
+    /// - `confirm_required`: 是否需要确认（可选，0 = 不需要，1 = 需要）
+    /// - `is_show_edit_card`: 是否显示编辑名片提示（可选，0 = 不显示，1 = 显示）
+    /// - `tip_window_type`: 提示窗口类型（可选）
     ///
     /// # 返回值
     ///
@@ -322,6 +371,11 @@ impl NapCatApi {
         group_id: i64,
         content: &str,
         image: Option<&str>,
+        pinned: Option<i32>,
+        notice_type: Option<i32>,
+        confirm_required: Option<i32>,
+        is_show_edit_card: Option<i32>,
+        tip_window_type: Option<i32>,
     ) -> Result<Value> {
         // 构建基本请求参数：群号和公告内容
         let mut params = json!({"group_id": group_id, "content": content});
@@ -329,6 +383,26 @@ impl NapCatApi {
         if let Some(img) = image {
             // 设置 image 字段为公告图片 URL
             params["image"] = json!(img);
+        }
+        // 如果指定了置顶选项，添加到参数中
+        if let Some(p) = pinned {
+            params["pinned"] = json!(p);
+        }
+        // 如果指定了公告类型，添加到参数中（JSON 字段名为 "type"）
+        if let Some(t) = notice_type {
+            params["type"] = json!(t);
+        }
+        // 如果指定了是否需要确认，添加到参数中
+        if let Some(c) = confirm_required {
+            params["confirm_required"] = json!(c);
+        }
+        // 如果指定了是否显示编辑名片提示，添加到参数中
+        if let Some(s) = is_show_edit_card {
+            params["is_show_edit_card"] = json!(s);
+        }
+        // 如果指定了提示窗口类型，添加到参数中
+        if let Some(tw) = tip_window_type {
+            params["tip_window_type"] = json!(tw);
         }
         // 调用 _send_group_notice action 发送请求
         self.client.call("_send_group_notice", params).await
@@ -363,8 +437,13 @@ impl NapCatApi {
     ///
     /// 成功返回空数据
     pub async fn del_group_notice(&self, group_id: i64, notice_id: &str) -> Result<Value> {
-        // 调用 _del_group_notice action，传入群号和公告 ID
-        self.client.call("_del_group_notice", json!({"group_id": group_id, "notice_id": notice_id})).await
+        // TS 版使用 +noticeId 将字符串转为数字，这里也做同样处理
+        // 如果 notice_id 无法解析为数字，则原样发送字符串
+        let notice_id_value = notice_id.parse::<i64>()
+            .map(|n| json!(n))
+            .unwrap_or_else(|_| json!(notice_id));
+        // 调用 _del_group_notice action，传入群号和公告 ID（数字类型）
+        self.client.call("_del_group_notice", json!({"group_id": group_id, "notice_id": notice_id_value})).await
     }
 
     // ========================================================================
@@ -403,8 +482,8 @@ impl NapCatApi {
     /// # 参数
     ///
     /// - `face_id`: 表情 ID
-    /// - `wording`: 状态文字描述
-    /// - `face_type`: 表情类型（可选）
+    /// - `wording`: 状态文字描述（TS 版默认为空格 ' '）
+    /// - `face_type`: 表情类型（可选，默认为 1，与 TS 版 faceType = 1 一致）
     ///
     /// # 返回值
     ///
@@ -415,13 +494,12 @@ impl NapCatApi {
         wording: &str,
         face_type: Option<i32>,
     ) -> Result<Value> {
-        // 构建基本请求参数：表情 ID 和文字描述
-        let mut params = json!({"face_id": face_id, "wording": wording});
-        // 如果指定了表情类型，添加到参数中
-        if let Some(ft) = face_type {
-            // 设置 face_type 字段
-            params["face_type"] = json!(ft);
-        }
+        // 构建请求参数：表情 ID、文字描述和表情类型（默认值 1）
+        let params = json!({
+            "face_id": face_id,
+            "wording": wording,
+            "face_type": face_type.unwrap_or(1)
+        });
         // 调用 set_diy_online_status action 发送请求
         self.client.call("set_diy_online_status", params).await
     }
@@ -452,14 +530,14 @@ impl NapCatApi {
     ///
     /// # 参数
     ///
-    /// - `params`: 群 Ark 分享参数 JSON（包含 group_id 和 Ark 消息内容）
+    /// - `group_id`: 群号
     ///
     /// # 返回值
     ///
     /// 成功返回分享结果 JSON
-    pub async fn send_group_ark_share(&self, params: Value) -> Result<Value> {
-        // 调用 send_group_ark_share action，直接传递完整参数
-        self.client.call("send_group_ark_share", params).await
+    pub async fn send_group_ark_share(&self, group_id: i64) -> Result<Value> {
+        // 调用 send_group_ark_share action，传入群号
+        self.client.call("send_group_ark_share", json!({"group_id": group_id})).await
     }
 
     /// 获取小程序 Ark 消息
@@ -488,21 +566,18 @@ impl NapCatApi {
     ///
     /// # 参数
     ///
-    /// - `group_id`: 群号（可选，部分角色可能仅在群聊中可用）
+    /// - `group_id`: 群号
+    /// - `chat_type`: 聊天类型标识（可选，默认为 1，与 TS 版 chatType = 1 一致）
     ///
     /// # 返回值
     ///
     /// 成功返回 AI 语音角色列表 JSON
-    pub async fn get_ai_characters(&self, group_id: Option<i64>) -> Result<Value> {
-        // 构建基本请求参数（空 JSON 对象）
-        let mut params = json!({});
-        // 如果指定了群号，添加到参数中
-        if let Some(gid) = group_id {
-            // 设置 group_id 字段
-            params["group_id"] = json!(gid);
-        }
-        // 调用 get_ai_characters action 发送请求
-        self.client.call("get_ai_characters", params).await
+    pub async fn get_ai_characters(&self, group_id: i64, chat_type: Option<i64>) -> Result<Value> {
+        // 调用 get_ai_characters action，传入群号和聊天类型（默认值 1）
+        self.client.call("get_ai_characters", json!({
+            "group_id": group_id,
+            "chat_type": chat_type.unwrap_or(1)
+        })).await
     }
 
     /// 获取 AI 语音
@@ -511,28 +586,25 @@ impl NapCatApi {
     ///
     /// # 参数
     ///
+    /// - `group_id`: 群号
     /// - `character`: AI 角色标识
     /// - `text`: 要转换为语音的文本
-    /// - `group_id`: 群号（可选）
     ///
     /// # 返回值
     ///
     /// 成功返回 AI 语音数据 JSON
     pub async fn get_ai_record(
         &self,
+        group_id: i64,
         character: &str,
         text: &str,
-        group_id: Option<i64>,
     ) -> Result<Value> {
-        // 构建基本请求参数：角色标识和文本内容
-        let mut params = json!({"character": character, "text": text});
-        // 如果指定了群号，添加到参数中
-        if let Some(gid) = group_id {
-            // 设置 group_id 字段
-            params["group_id"] = json!(gid);
-        }
-        // 调用 get_ai_record action 发送请求
-        self.client.call("get_ai_record", params).await
+        // 调用 get_ai_record action，传入群号、角色标识和文本内容
+        self.client.call("get_ai_record", json!({
+            "group_id": group_id,
+            "character": character,
+            "text": text
+        })).await
     }
 
     /// 发送群 AI 语音
@@ -640,6 +712,11 @@ impl NapCatApi {
     ///
     /// 对应 OneBot action: `click_inline_keyboard_button`
     ///
+    /// TS 版会为缺失的字段设置默认值：
+    /// - `button_id`: 默认 `""`
+    /// - `callback_data`: 默认 `""`
+    /// - `msg_seq`: 默认 `"10086"`
+    ///
     /// # 参数
     ///
     /// - `params`: 按钮参数 JSON（包含 bot_appid、button_id 等字段）
@@ -648,7 +725,21 @@ impl NapCatApi {
     ///
     /// 成功返回空数据
     pub async fn click_inline_keyboard_button(&self, params: Value) -> Result<Value> {
-        // 调用 click_inline_keyboard_button action，直接传递完整参数
-        self.client.call("click_inline_keyboard_button", params).await
+        // 克隆参数以便修改，为缺失的字段填充默认值（与 TS 版一致）
+        let mut p = params;
+        // button_id 默认为空字符串
+        if p.get("button_id").is_none() {
+            p["button_id"] = json!("");
+        }
+        // callback_data 默认为空字符串
+        if p.get("callback_data").is_none() {
+            p["callback_data"] = json!("");
+        }
+        // msg_seq 默认为 "10086"
+        if p.get("msg_seq").is_none() {
+            p["msg_seq"] = json!("10086");
+        }
+        // 调用 click_inline_keyboard_button action
+        self.client.call("click_inline_keyboard_button", p).await
     }
 }

@@ -63,11 +63,13 @@ pub const NAPCAT_ACTIONS: &[&str] = &[
     "set_group_ban",                // 群禁言
     "set_group_whole_ban",          // 全员禁言
     "set_group_kick",               // 群踢人
+    "set_group_kick_members",       // 批量群踢人
     "set_group_leave",              // 退出群组
     "set_group_card",               // 设置群名片
     "set_group_name",               // 设置群名
     "set_group_admin",              // 设置群管理员
     "set_group_anonymous_ban",      // 匿名用户禁言
+    "set_group_anonymous",          // 设置群匿名
     "set_group_special_title",      // 设置群专属头衔
     "send_like",                    // 发送好友赞
     // 账号信息
@@ -91,6 +93,7 @@ pub const NAPCAT_ACTIONS: &[&str] = &[
     "get_group_root_files",         // 获取群根目录文件列表
     "get_group_files_by_folder",    // 获取群子目录文件列表
     "get_group_file_url",           // 获取群文件下载 URL
+    "get_private_file_url",         // 获取私聊文件下载 URL
     "delete_group_file",            // 删除群文件
     "create_group_file_folder",     // 创建群文件夹
     "delete_group_folder",          // 删除群文件夹
@@ -118,6 +121,7 @@ pub const NAPCAT_ACTIONS: &[&str] = &[
     "check_url_safely",             // URL 安全检测
     ".handle_quick_operation",      // 快速操作（隐藏接口）
     "nc_get_packet_status",         // 获取 NapCat 封包状态
+    "nc_get_user_status",           // 获取用户在线状态
     "_get_model_show",              // 获取在线机型展示
     "_set_model_show",              // 设置在线机型展示
 
@@ -129,13 +133,16 @@ pub const NAPCAT_ACTIONS: &[&str] = &[
     // 好友扩展
     "set_friend_remark",            // 设置好友备注
     "delete_friend",                // 删除好友
+    "delete_unidirectional_friend", // 删除单向好友
     "get_unidirectional_friend_list", // 获取单向好友列表
+    "get_friends_with_category",    // 获取分类好友列表
     // 群扩展
     "set_group_remark",             // 设置群备注
     "get_group_info_ex",            // 获取群扩展信息
     "get_group_detail_info",        // 获取群详细信息
     "get_group_ignored_notifies",   // 获取群被忽略通知
     "get_group_shut_list",          // 获取群禁言列表
+    "get_group_album_media_list",   // 获取群相册媒体列表
     // 消息转发
     "forward_friend_single_msg",    // 转发单条好友消息
     "forward_group_single_msg",     // 转发单条群消息
@@ -196,6 +203,22 @@ pub const NAPCAT_ACTIONS: &[&str] = &[
     "set_group_search",             // 设置群搜索
     "set_group_todo",               // 设置群待办
     "upload_image_to_qun_album",    // 上传图片到群相册
+    // 频道相关
+    "get_guild_list",               // 获取频道列表
+    "get_guild_service_profile",    // 获取频道服务资料
+    // 企点相关
+    "qidian_get_account_info",      // 获取企点账号信息
+    // 系统扩展
+    "set_restart",                  // 设置重启
+    "set_self_longnick",            // 设置自身长昵称
+    // 流式传输扩展
+    "test_download_stream",         // 测试下载流
+    "clean_stream_temp_file",       // 清理流式传输临时文件
+    // 测试/调试
+    "test_auto_register_01",        // 自动注册测试 01
+    "test_auto_register_02",        // 自动注册测试 02
+    // 其他
+    "unknown",                      // 未知 action（占位/兜底）
 ];
 
 /// 原始 Action API — 直接调用任意 NapCat action

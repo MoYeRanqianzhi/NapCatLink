@@ -82,7 +82,7 @@ pub struct ConnectionConfig {
 /// 每次重连间隔 = min(initial_ms * multiplier^(attempt-1), max_ms)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackoffConfig {
-    /// 初始退避时间（毫秒），即首次重连前等待的时间，默认 5000ms（5秒）
+    /// 初始退避时间（毫秒），即首次重连前等待的时间，默认 1000ms（1秒）
     pub initial_ms: u64,
     /// 最大退避时间（毫秒），退避时间的上限，默认 60000ms（60秒）
     pub max_ms: u64,
@@ -94,8 +94,8 @@ pub struct BackoffConfig {
 impl Default for BackoffConfig {
     fn default() -> Self {
         Self {
-            // 初始退避时间 5 秒
-            initial_ms: 5000,
+            // 初始退避时间 1 秒
+            initial_ms: 1000,
             // 最大退避时间 60 秒
             max_ms: 60000,
             // 退避乘数 2.0（每次翻倍）
@@ -111,7 +111,7 @@ impl Default for BackoffConfig {
 pub struct ReconnectConfig {
     /// 是否启用自动重连，默认 true
     pub enabled: bool,
-    /// 最大重连尝试次数，默认 5 次；超过后停止重连并返回错误
+    /// 最大重连尝试次数，默认 10 次；超过后停止重连并返回错误
     pub max_attempts: u32,
     /// 指数退避策略配置，控制重连间隔的递增行为
     pub backoff: BackoffConfig,
@@ -123,8 +123,8 @@ impl Default for ReconnectConfig {
         Self {
             // 默认启用自动重连
             enabled: true,
-            // 默认最大重连 5 次
-            max_attempts: 5,
+            // 默认最大重连 10 次
+            max_attempts: 10,
             // 使用默认的退避策略
             backoff: BackoffConfig::default(),
         }
@@ -155,9 +155,9 @@ impl Default for LoggingConfig {
 /// 控制 OneBot API 调用的超时和重试行为。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiConfig {
-    /// API 调用超时时间（毫秒），默认 15000ms（15秒）
+    /// API 调用超时时间（毫秒），默认 30000ms（30秒）
     pub timeout_ms: u64,
-    /// API 调用失败时的重试次数，默认 2 次
+    /// API 调用失败时的重试次数，默认 3 次
     pub retries: u32,
 }
 
@@ -165,10 +165,10 @@ pub struct ApiConfig {
 impl Default for ApiConfig {
     fn default() -> Self {
         Self {
-            // 默认 API 超时 15 秒
-            timeout_ms: 15000,
-            // 默认重试 2 次
-            retries: 2,
+            // 默认 API 超时 30 秒
+            timeout_ms: 30000,
+            // 默认重试 3 次
+            retries: 3,
         }
     }
 }
@@ -273,16 +273,16 @@ impl NapLinkConfigBuilder {
             heartbeat_action: HeartbeatAction::default(),
             // 默认启用自动重连
             reconnect_enabled: true,
-            // 默认最大重连 5 次
-            max_reconnect_attempts: 5,
+            // 默认最大重连 10 次
+            max_reconnect_attempts: 10,
             // 使用默认的退避策略
             backoff: BackoffConfig::default(),
             // 默认日志级别为 Info
             log_level: LogLevel::Info,
-            // API 超时默认 15 秒
-            api_timeout_ms: 15000,
-            // API 重试默认 2 次
-            api_retries: 2,
+            // API 超时默认 30 秒
+            api_timeout_ms: 30000,
+            // API 重试默认 3 次
+            api_retries: 3,
         }
     }
 
