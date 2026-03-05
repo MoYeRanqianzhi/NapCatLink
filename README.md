@@ -99,11 +99,16 @@ cargo run --example group_admin
 NapLink::builder("ws://127.0.0.1:3001")
     .token("token")                     // 认证 Token
     .reconnect_enabled(true)            // 自动重连（默认 true）
-    .reconnect_max_attempts(10)         // 最大重连次数（默认 5）
-    .api_timeout_ms(30000)              // API 超时（默认 15s）
+    .reconnect_max_attempts(10)         // 最大重连次数（默认 10）
+    .api_timeout_ms(30000)              // API 超时（默认 30s）
     .ping_interval_ms(30000)            // 心跳间隔（默认 30s）
     .build()?
 ```
+
+## 致谢
+
+- [NapCatQQ](https://github.com/NapNeko/NapCatQQ) — 基于 NTQQ 的 Bot 框架，提供 OneBot 11 协议实现。本项目的核心功能围绕 NapCatQQ 构建。
+- [NapLink](https://github.com/aspect-build/NapLink) — TypeScript 版 NapCatQQ SDK，本项目的参考实现。Rust 版的 API 设计、事件系统和连接管理均对照 NapLink 源码开发。
 
 ## 文档
 
